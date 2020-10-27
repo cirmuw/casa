@@ -33,7 +33,7 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
         self.hparams = utils.default_params(self.get_default_hparams(), hparams)
         self.hparams = argparse.Namespace(**self.hparams)
 
-        self.device = device
+        self.to(device)
 
         self.stylemodel = EncoderModelGenesis()
 
@@ -180,13 +180,13 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
         #TODO: insert checkpoints for BWT/FWT calculation here
 
         if ('1.5T Philips' in scanner) and ('3.0T Philips' in scanner):  # this is not the most elegant thing to do
-            exp_name = utils.get_expname_age(self.hparams)
+            exp_name = utils.get_expname(self.hparams)
             weights_path = utils.TRAINED_MODELS_FOLDER + exp_name + '_shift_1_ckpt.pt'
             if not self.shiftcheckpoint_1:
                 torch.save(self.model.state_dict(), weights_path)
                 self.shiftcheckpoint_1 = True
         elif ('3.0T Philips' in scanner) and ('3.0T' in scanner):
-            exp_name = utils.get_expname_age(self.hparams)
+            exp_name = utils.get_expname(self.hparams)
             weights_path = utils.TRAINED_MODELS_FOLDER + exp_name + '_shift_2_ckpt.pt'
             if not self.shiftcheckpoint_2:
                 torch.save(self.model.state_dict(), weights_path)
@@ -527,13 +527,13 @@ def trained_model(hparams):
     else:
         device = torch.device('cpu')
     model = FastGramDynamicMemoryBrainAge(hparams=hparams, device=device)
-    exp_name = utils.get_expname_age(model.hparams)
+    exp_name = utils.get_expname(model.hparams)
     weights_path = utils.TRAINED_MODELS_FOLDER + exp_name +'.pt'
 
     if not os.path.exists(utils.TRAINED_MODELS_FOLDER + exp_name + '.pt'):
         logger = pllogging.TestTubeLogger(utils.LOGGING_FOLDER, name=exp_name)
-        trainer = Trainer(gpus=1, max_epochs=1, early_stop_callback=False, logger=logger,
-                          val_check_interval=model.hparams.val_check_interval, show_progress_bar=False,
+        trainer = Trainer(gpus=1, max_epochs=1, logger=logger,
+                          val_check_interval=model.hparams.val_check_interval,
                           checkpoint_callback=False)
         trainer.fit(model)
         model.freeze()
@@ -556,11 +556,11 @@ def trained_model(hparams):
 
 def is_cached(hparams):
     model = FastGramDynamicMemoryBrainAge(hparams=hparams)
-    exp_name = utils.get_expname_age(model.hparams)
+    exp_name = utils.get_expname(model.hparams)
     return os.path.exists(utils.TRAINED_MODELS_FOLDER + exp_name + '.pt')
 
 
 def cached_path(hparams):
     model = FastGramDynamicMemoryBrainAge(hparams=hparams)
-    exp_name = utils.get_expname_age(model.hparams)
+    exp_name = utils.get_expname(model.hparams)
     return utils.TRAINED_MODELS_FOLDER + exp_name + '.pt'

@@ -1,4 +1,5 @@
 from py_jotools import mut
+from pytorch_lightning.utilities.parsing import AttributeDict
 import argparse
 import pandas as pd
 import pytorch_lightning.loggers as pllogging
@@ -30,6 +31,8 @@ def default_params(dparams, params):
 def get_expname(hparams):
     if type(hparams) is argparse.Namespace:
         hparams = vars(hparams).copy()
+    elif type(hparams) is AttributeDict:
+        hparams = dict(hparams)
 
     hashed_params = mut.hash(hparams, length=10)
 
