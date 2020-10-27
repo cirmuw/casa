@@ -1,4 +1,3 @@
-from py_jotools import mut
 from pytorch_lightning.utilities.parsing import AttributeDict
 import argparse
 import pandas as pd
@@ -10,6 +9,10 @@ from torch import nn
 from torch.nn import functional as F
 from torch.autograd import Variable
 import os
+import hashlib
+import pickle
+import skimage
+import numpy as np
 
 LOGGING_FOLDER = '/project/catinous/active_catinous/tensorboard_logs/'
 TRAINED_MODELS_FOLDER = '/project/catinous/active_catinous/trained_models/'
@@ -34,7 +37,7 @@ def get_expname(hparams):
     elif type(hparams) is AttributeDict:
         hparams = dict(hparams)
 
-    hashed_params = mut.hash(hparams, length=10)
+    hashed_params = hash(hparams, length=10)
 
     expname = 'cont' if hparams['continuous'] else 'batch'
     expname += '_' + os.path.splitext(os.path.basename(hparams['datasetfile']))[0]
@@ -59,3 +62,35 @@ def save_memory_to_csv(memory, savepath):
 
 def pllogger(hparams):
     return pllogging.TestTubeLogger(LOGGING_FOLDER, name=get_expname(hparams))
+
+def sort_dict(input_dict):
+    dict_out = {}
+    keys = list(input_dict.keys())
+    keys.sort()
+    for key in keys:
+        if type(input_dict[key]) is dict:
+            value = sort_dict(input_dict[key])
+        else:
+            value = input_dict[key]
+        dict_out[key] = value
+    return dict_out
+
+
+def hash(item, length=40):
+    assert (type(item) is dict)
+    item = sort_dict(item)
+    return hashlib.sha1(pickle.dumps(item)).hexdigest()[0:length]
+
+def resize(img, size, order=1, anti_aliasing=True):
+    for i in range(len(size)):
+        if size[i] is None:
+            size[i] = img.shape[i]
+    return skimage.transform.resize(img, size, order=order, mode='reflect', anti_aliasing=anti_aliasing, preserve_range=True)
+
+def norm01(x):
+    """Normalizes values in x to be between 0 and 255"""
+    r = (x - np.min(x))
+    m = np.max(r)
+    if m > 0:
+        r = np.divide(r, np.max(r))
+    return r
