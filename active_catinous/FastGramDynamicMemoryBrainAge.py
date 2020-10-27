@@ -47,7 +47,7 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
                 unParalled_state_dict[key.replace("module.", "")] = state_dict[key]
         self.stylemodel.load_state_dict(unParalled_state_dict)
 
-        if self.hparams.use_cache and self.hparams.continous:
+        if self.hparams.use_memory and self.hparams.continous:
             self.init_cache_and_gramhooks()
         else:
             if verbose:
@@ -58,7 +58,7 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
                              'random_cache \n'
                              'force_misclassified \n'
                              'direction')
-            self.hparams.use_cache = False
+            self.hparams.use_memory = False
 
         self.stylemodel.to(device)
         self.stylemodel.eval()
@@ -536,14 +536,14 @@ def trained_model(hparams):
         trainer.fit(model)
         model.freeze()
         torch.save(model.state_dict(), weights_path)
-        if model.hparams.continous and model.hparams.use_cache:
+        if model.hparams.continous and model.hparams.use_memory:
             utils.save_cache_to_csv(model.trainingscache.cachelist, utils.TRAINED_CACHE_FOLDER + exp_name + '.csv')
     else:
         print('Read: ' + weights_path)
         model.load_state_dict(torch.load(weights_path, map_location=torch.device('cpu')))
         model.freeze()
 
-    if model.hparams.continous and model.hparams.use_cache:
+    if model.hparams.continous and model.hparams.use_memory:
         df_cache = pd.read_csv(utils.TRAINED_CACHE_FOLDER + exp_name + '.csv')
 
     # always get the last version
