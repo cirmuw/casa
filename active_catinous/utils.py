@@ -1,6 +1,7 @@
 from py_jotools import mut
 import argparse
 import pandas as pd
+import pytorch_lightning.loggers as pllogging
 from copy import deepcopy
 
 import torch
@@ -33,7 +34,7 @@ def get_expname(hparams):
     hashed_params = mut.hash(hparams, length=10)
 
     expname = 'cont' if hparams['continuous'] else 'batch'
-    expname += '_' + os.path.splitext(os.path.basename(hparams['datasetfile']))
+    expname += '_' + os.path.splitext(os.path.basename(hparams['datasetfile']))[0]
     if hparams['base_model']:
         expname += '_basemodel_' + hparams['base_model'].split('_')[1]
     if hparams['continous']:
@@ -52,3 +53,6 @@ def save_memory_to_csv(memory, savepath):
                              'scanner': [e.scanner for e in memory],
                              'pseudodomain': [e.domain for e in memory]})
     df_memory.to_csv(savepath, index=False, index_label=False)
+
+def pllogger(hparams):
+    return pllogging.TestTubeLogger(LOGGING_FOLDER, name=get_expname(hparams))
