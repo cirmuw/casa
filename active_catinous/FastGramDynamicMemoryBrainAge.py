@@ -76,13 +76,15 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
         self.loss = nn.MSELoss()
         self.mae = nn.L1Loss()
 
-        initmemoryelements = self.getmemoryitems_from_base(num_items=self.hparams.memorymaximum)
+        if self.hparams.continous:
 
-        #PREFILL memory with base training samples!!!!
-        self.trainingsmemory = DynamicMemoryAge(initelements=initmemoryelements,
-                                                memorymaximum=self.hparams.memorymaximum,
-                                               gram_weights=self.hparams.gram_weights,
-                                                seed=self.hparams.seed)
+            initmemoryelements = self.getmemoryitems_from_base(num_items=self.hparams.memorymaximum)
+
+            #PREFILL memory with base training samples!!!!
+            self.trainingsmemory = DynamicMemoryAge(initelements=initmemoryelements,
+                                                    memorymaximum=self.hparams.memorymaximum,
+                                                   gram_weights=self.hparams.gram_weights,
+                                                    seed=self.hparams.seed)
 
         if verbose:
             pprint(vars(self.hparams))
