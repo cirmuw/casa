@@ -11,7 +11,7 @@ from torch.autograd import Variable
 import os
 import hashlib
 import pickle
-import skimage
+import skimage.transform
 import numpy as np
 
 LOGGING_FOLDER = '/project/catinous/active_catinous/tensorboard_logs/'
