@@ -1,9 +1,9 @@
 from torch.utils.data.dataset import Dataset
 import pandas as pd
-from py_jotools import augmentation, mut
 import numpy as np
 import nibabel as nib
 import torch
+from active_catinous.utils import *
 
 class BrainAgeContinuous(Dataset):
 
@@ -64,8 +64,8 @@ class BrainAgeContinuous(Dataset):
         nimg = nib.as_closest_canonical(nimg)
         img = nimg.get_fdata()
         img = img.swapaxes(0, 2)
-        img = mut.resize(img, (64, 128, 128))
-        img = mut.norm01(img)
+        img = resize(img, (64, 128, 128))
+        img = norm01(img)
         img = img[None, :, :, :]
 
         return torch.tensor(img).float(), torch.tensor(self.df.iloc[index].Age).float(), self.df.iloc[index].Image, self.df.iloc[index].Scanner
