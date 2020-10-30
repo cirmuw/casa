@@ -16,7 +16,7 @@ import numpy as np
 
 LOGGING_FOLDER = '/project/catinous/active_catinous/tensorboard_logs/'
 TRAINED_MODELS_FOLDER = '/project/catinous/active_catinous/trained_models/'
-TRAINED_CACHE_FOLDER = '/project/catinous/active_catinous/trained_cache/'
+TRAINED_MEMORY_FOLDER = '/project/catinous/active_catinous/trained_memory/'
 RESPATH = '/project/catinous/active_catinous/results/'
 
 def default_params(dparams, params):
@@ -75,6 +75,14 @@ def sort_dict(input_dict):
         dict_out[key] = value
     return dict_out
 
+
+def save_memory_to_csv(memory, savepath):
+    df_cache = pd.DataFrame({'filepath':[ci.filepath for ci in memory],
+                             'label': [ci.label.cpu().numpy()[0] for ci in memory],
+                             'res': [ci.res for ci in memory],
+                             'pseudo_domain':  [ci.pseudo_domain for ci in memory],
+                             'traincounter': [ci.traincounter for ci in memory]})
+    df_cache.to_csv(savepath, index=False, index_label=False)
 
 def hash(item, length=40):
     assert (type(item) is dict)

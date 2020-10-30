@@ -562,20 +562,23 @@ def trained_model(hparams):
         model.freeze()
         torch.save(model.state_dict(), weights_path)
         if model.hparams.continous and model.hparams.use_memory:
-            utils.save_cache_to_csv(model.trainingscache.cachelist, utils.TRAINED_CACHE_FOLDER + exp_name + '.csv')
+            utils.save_memory_to_csv(model.trainingsmemory.memorylist, utils.TRAINED_MEMORY_FOLDER + exp_name + '.csv')
     else:
         print('Read: ' + weights_path)
         model.load_state_dict(torch.load(weights_path, map_location=torch.device('cpu')))
         model.freeze()
 
     if model.hparams.continous and model.hparams.use_memory:
-        df_cache = pd.read_csv(utils.TRAINED_CACHE_FOLDER + exp_name + '.csv')
+        if os.path.exists(utils.TRAINED_MEMORY_FOLDER + exp_name + '.csv'):
+            df_memory = pd.read_csv(utils.TRAINED_MEMORY_FOLDER + exp_name + '.csv')
+        else:
+            df_memory = None
 
     # always get the last version
     max_version = max([int(x.split('_')[1]) for x in os.listdir(utils.LOGGING_FOLDER + exp_name)])
     logs = pd.read_csv(utils.LOGGING_FOLDER + exp_name + '/version_{}/metrics.csv'.format(max_version))
 
-    return model, logs, df_cache, exp_name +'.pt'
+    return model, logs, df_memory, exp_name +'.pt'
 
 def is_cached(hparams):
     model = FastGramDynamicMemoryBrainAge(hparams=hparams)
