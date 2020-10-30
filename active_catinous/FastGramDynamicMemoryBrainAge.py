@@ -96,6 +96,8 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
                                                    gram_weights=self.hparams.gram_weights,
                                                     seed=self.hparams.seed)
 
+            print(len(self.trainingsmemory.get_domainitems(0)))
+
         if verbose:
             pprint(vars(self.hparams))
 
@@ -143,7 +145,8 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
 
             for i, f in enumerate(filepath):
                 memoryitems.append(MemoryItem(x[i].detach().cpu(), y[i], f, scanner[i],
-                                              current_grammatrix=self.grammatrices[0][i].detach().cpu().numpy().flatten(), pseudo_domain=0))
+                                              current_grammatrix=self.grammatrices[0][i].detach().cpu().numpy().flatten(),
+                                              pseudo_domain=0))
 
             if len(memoryitems)>=num_items:
                 break
@@ -240,10 +243,8 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
                             error = mean_absolute_error(true, preds)
                             if error <= self.hparams.completion_limit:
                                 self.trainingsmemory.domaincomplete[k] = True
-                            print(k, error)
 
                 self.train()
-
 
                 trainingbatch = self.trainingsmemory.get_training_batch(self.hparams.batch_size+2)
                 x, y = trainingbatch
@@ -256,7 +257,6 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
                 loss = self.loss(y_hat, y.float())
 
                 self.train_counter += 1
-
                 self.log('train_loss', loss)
 
                 return loss
@@ -411,7 +411,9 @@ class DynamicMemoryAge():
                 if p == 1:
                     idx = self.find_insert_position()
                     if idx != -1:
-                        self.memorylist[idx] = self.outlier_memory[k]
+                        elem = self.outlier_memory[k]
+                        elem.pseudo_domain = new_domain_label
+                        self.memorylist[idx] = elem
                         self.domaincounter[new_domain_label] += 1
                         to_delete.append(self.outlier_memory[k])
 
@@ -428,14 +430,17 @@ class DynamicMemoryAge():
 
     def flag_items_for_deletion(self):
         #TODO find a smart way to do this
-        for k, v in self.domaincounter.items():
-            if v>self.max_per_domain:
-                todelete = v-self.max_per_domain
+        for k, v in self.domaincomplete.items():
+            domain_count = len(self.get_domainitems(k))
+            if domain_count>self.max_per_domain:
+                todelete = domain_count-self.max_per_domain
                 for item in self.memorylist:
-                    if not item.deleteflag:
-                        item.deleteflag = True
-                    else:
-                        todelete -= 1
+                    if todelete>0:
+                        if item.pseudo_domain==k:
+                            if not item.deleteflag:
+                                item.deleteflag = True
+
+                            todelete -= 1
 
 
     def counter_outlier_memory(self):
@@ -464,7 +469,6 @@ class DynamicMemoryAge():
                     mingramloss = 1000
                     for j, mi in enumerate(self.memorylist):
                         if mi.pseudo_domain == domain:
-                            print(item.current_grammatrix, mi.current_grammatrix)
                             loss = F.mse_loss(torch.tensor(item.current_grammatrix), torch.tensor(mi.current_grammatrix), reduction='mean')
 
                             if loss < mingramloss:
