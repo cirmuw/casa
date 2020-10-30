@@ -121,6 +121,7 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
         hparams['gram_weights'] = [1, 1, 1, 1]
         hparams['seed'] = 2314134
         hparams['completion_limit'] = 4.0
+        hparams['gradient_clip_val'] = 0
 
         return hparams
 
@@ -244,7 +245,6 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
                 self.train()
 
 
-                print('domain incomplete training')
                 trainingbatch = self.trainingsmemory.get_training_batch(self.hparams.batch_size+2)
                 x, y = trainingbatch
 
@@ -254,8 +254,6 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
                 y_hat = self.model(x.float())
 
                 loss = self.loss(y_hat, y.float())
-
-                print('loss', loss.item())
 
                 self.train_counter += 1
 
@@ -553,6 +551,7 @@ def trained_model(hparams):
         logger = pllogging.TestTubeLogger(utils.LOGGING_FOLDER, name=exp_name)
         trainer = Trainer(gpus=1, max_epochs=1, logger=logger,
                           val_check_interval=model.hparams.val_check_interval,
+                          gradient_clip_val=model.hparams.gradient_clip_val,
                           checkpoint_callback=False)
         trainer.fit(model)
         print('train counter', model.train_counter)
