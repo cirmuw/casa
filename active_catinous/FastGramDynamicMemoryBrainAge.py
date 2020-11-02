@@ -220,7 +220,8 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
                 new_mi = MemoryItem(img, y[i], filepath[i], scanner[i], grammatrix[0])
                 self.trainingsmemory.insert_element(new_mi)
 
-            self.trainingsmemory.check_outlier_memory() #TODO: delete from outlier memory if samples are longer than X batches in memory
+            self.trainingsmemory.check_outlier_memory()
+            self.trainingsmemory.counter_outlier_memory()
 
             #form trainings X domain balanced batches to train one epoch on all newly inserted samples
             if not np.all(list(self.trainingsmemory.domaincomplete.values())): #only train when a domain is incomplete
@@ -246,15 +247,20 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
 
                 self.train()
 
-                trainingbatch = self.trainingsmemory.get_training_batch(self.hparams.batch_size+2)
-                x, y = trainingbatch
+                xs, ys = self.trainingsmemory.get_training_batch(self.hparams.batch_size, batches=2)
 
-                x = x.to(self.device)
-                y = y.to(self.device)
+                loss = None
+                for i, x in enumerate(xs):
+                    y = ys[i]
 
-                y_hat = self.model(x.float())
+                    x = x.to(self.device)
+                    y = y.to(self.device)
 
-                loss = self.loss(y_hat, y.float())
+                    y_hat = self.model(x.float())
+                    if loss is None:
+                        loss = self.loss(y_hat, y.float())
+                    else:
+                        loss += self.loss(y_hat, y.float())
 
                 self.train_counter += 1
                 self.log('train_loss', loss)
@@ -389,15 +395,17 @@ class DynamicMemoryAge():
         self.domaincomplete = {0: True}
 
         self.outlier_memory = []
-        self.outlier_epochs = 10
+        self.outlier_epochs = 25
 
         self.img_size = (64, 128, 128)
 
     def check_outlier_memory(self):
         if len(self.outlier_memory)>10:
             outlier_grams = [o.current_grammatrix for o in self.outlier_memory]
+            # TODO: have to do a pre selection of cache elements here based on, shouldnt add a new pseudodomain if memory is to far spread
+            # Add up all pairwise distances if median distance smaller than threshold insert new domain.
             clf = IsolationForest(n_estimators=5, random_state=self.seed, warm_start=True, contamination=0.10).fit(
-                outlier_grams) # TODO: have to do a pre selection of cache elements here based on, shouldnt add a new pseudodomain if memory is to far spread
+                outlier_grams)
 
             new_domain_label = len(self.isoforests)
             self.domaincomplete[new_domain_label] = False
@@ -492,35 +500,46 @@ class DynamicMemoryAge():
 
         return current_domain
 
-    def get_training_batch(self, batchsize): #TODO: force new items!!
-        j = 0
-        x = torch.empty(size=(batchsize, 1, self.img_size[0], self.img_size[1], self.img_size[2]))
-        y = torch.empty(size=(batchsize, 1))
+    def get_training_batch(self, batchsize, batches=1): #TODO: force new items!!
 
-        elements_per_domain = round(batchsize/len(self.domaincounter))
+        xs = []
+        ys = []
 
-        for d in self.domaincounter:
-            domain_items = []
-            for mi in self.memorylist:
-                if mi.pseudo_domain == d:
-                    domain_items.append(mi)
+        to_force = []
 
-            random.shuffle(domain_items)
-            for mi in domain_items[-elements_per_domain:]:
-                if j<batchsize:
+        half_batch = int(batchsize/2)
+
+        for d, c in self.domaincomplete.items():
+            if not c:
+                for mi in self.memorylist:
+                    if mi.pseudo_domain == d:
+                        to_force.append(mi)
+
+        for b in range(batches):
+            j = 0
+            bs = batchsize
+            x = torch.empty(size=(batchsize, 1, self.img_size[0], self.img_size[1], self.img_size[2]))
+            y = torch.empty(size=(batchsize, 1))
+
+            random.shuffle(to_force)
+            for mi in to_force[-half_batch:]:
+                if j<bs:
                     x[j] = mi.img
                     y[j] = mi.label
                     j += 1
 
-        batchsize -= j
-        if batchsize>0:
-            random.shuffle(domain_items)
-            for mi in domain_items[-batchsize:]:
-                x[j] = mi.img
-                y[j] = mi.label
-                j += 1
+            bs -= j
+            if bs>0:
+                random.shuffle(self.memorylist)
+                for mi in self.memorylist[-bs:]:
+                    x[j] = mi.img
+                    y[j] = mi.label
+                    j += 1
 
-        return x, y
+            xs.append(x)
+            ys.append(y)
+
+        return (xs, ys)
 
     def get_domainitems(self, domain):
         items = []
