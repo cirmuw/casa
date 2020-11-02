@@ -196,7 +196,6 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
         x, y, filepath, scanner = batch
 
         self.budget += len(filepath) * self.budgetrate
-        print(self.budget)
 
         #TODO: insert checkpoints for BWT/FWT calculation here
 
@@ -292,7 +291,7 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
         self.log_dict({f'val_loss_{res}': self.loss(y_hat, y[:, None].float()),
                        f'val_mae_{res}': self.mae(y_hat, y[:, None].float())})
 
-    def validation_end(self, outputs):
+    def validation_epoch_end(self, outputs):
         val_mean = dict()
         res_count = dict()
 
@@ -406,7 +405,7 @@ class DynamicMemoryAge():
         self.img_size = (64, 128, 128)
 
     def check_outlier_memory(self, budget):
-        if len(self.outlier_memory)>10:
+        if len(self.outlier_memory)>10 and int(budget)>=5:
             outlier_grams = [o.current_grammatrix for o in self.outlier_memory]
             # TODO: have to do a pre selection of cache elements here based on, shouldnt add a new pseudodomain if memory is to far spread
             # Add up all pairwise distances if median distance smaller than threshold insert new domain.
@@ -431,7 +430,7 @@ class DynamicMemoryAge():
                             self.memorylist[idx] = elem
                             self.domaincounter[new_domain_label] += 1
                             to_delete.append(self.outlier_memory[k])
-                            budget-=1.0
+                            budget -= 1.0
                 else:
                     print('run out of budget ', budget)
             for elem in to_delete:
@@ -448,7 +447,6 @@ class DynamicMemoryAge():
         return -1
 
     def flag_items_for_deletion(self):
-        #TODO find a smart way to do this
         for k, v in self.domaincomplete.items():
             domain_count = len(self.get_domainitems(k))
             if domain_count>self.max_per_domain:
@@ -497,6 +495,19 @@ class DynamicMemoryAge():
                     self.domaincounter[domain] += 1
                 self.memorylist[idx] = item
 
+                # add tree to clf of domain
+                clf = self.isoforests[domain]
+                domain_items = self.get_domainitems(domain)
+                domain_grams = [d.current_grammatrix for d in domain_items]
+
+                if len(clf.estimators_) < 10:
+                    n_estimators = len(clf.estimators_) + 1
+                else:
+                    n_estimators = 10
+                clf.__setattr__('n_estimators', n_estimators)
+                clf.fit(domain_grams)
+                self.isoforests[domain] = clf
+
                 budget -= 1.0
             else:
                 if int(budget)<1:
@@ -517,8 +528,7 @@ class DynamicMemoryAge():
 
         return current_domain
 
-    def get_training_batch(self, batchsize, batches=1): #TODO: force new items!!
-
+    def get_training_batch(self, batchsize, batches=1):
         xs = []
         ys = []
 

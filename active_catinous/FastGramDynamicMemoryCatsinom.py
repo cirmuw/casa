@@ -33,6 +33,9 @@ class FastGramDynamicMemoryCatsinom(pl.LightningModule):
 
         self.learning_rate = self.hparams.learning_rate
 
+        self.budget = 0.0
+        self.budgetrate = 1 / self.hparams.allowedlabelratio
+
         self.train_counter = 0
 
         self.to(device)
@@ -116,6 +119,7 @@ class FastGramDynamicMemoryCatsinom(pl.LightningModule):
         hparams['seed'] = 2314134
         hparams['gradient_clip_val'] = 0
         hparams['completion_limit'] = 0.85
+        hparams['allowedlabelratio'] = 10
 
         return hparams
 
@@ -185,6 +189,8 @@ class FastGramDynamicMemoryCatsinom(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         x, y, filepath, scanner = batch
 
+        self.budget += len(filepath) * self.budgetrate
+        print(self.budget)
         #TODO: insert checkpoints for BWT/FWT calculation here
 
         if ('lr' in scanner) and ('hr' in scanner):  # this is not the most elegant thing to do
@@ -211,9 +217,9 @@ class FastGramDynamicMemoryCatsinom(pl.LightningModule):
                 grammatrix = [bg[i].detach().cpu().numpy().flatten() for bg in self.grammatrices]
 
                 new_mi = MemoryItem(img, y[i], filepath[i], scanner[i], grammatrix[0])
-                self.trainingsmemory.insert_element(new_mi)
+                self.budget = self.trainingsmemory.insert_element(new_mi, self.budget)
 
-            self.trainingsmemory.check_outlier_memory()
+            self.budget = self.trainingsmemory.check_outlier_memory(self.budget)
             self.trainingsmemory.counter_outlier_memory()
 
             #form trainings X domain balanced batches to train one epoch on all newly inserted samples
@@ -222,6 +228,7 @@ class FastGramDynamicMemoryCatsinom(pl.LightningModule):
                 for k, v in self.trainingsmemory.domaincomplete.items():
                     if not v:
                         domainitems = self.trainingsmemory.get_domainitems(k)
+                        print(len(domainitems), k, self.trainingsmemory.max_per_domain)
                         if len(domainitems) >= self.trainingsmemory.max_per_domain:
                             preds = []
                             true = []
@@ -254,13 +261,12 @@ class FastGramDynamicMemoryCatsinom(pl.LightningModule):
 
                     y_hat = self.model(x.float())
                     if loss is None:
-                        loss = self.loss(y_hat, y.float())
+                        loss =self.loss(y_hat, y.float())
                     else:
                         loss += self.loss(y_hat, y.float())
 
                 self.train_counter += 1
                 self.log('train_loss', loss)
-                print('return train loss', loss.item())
 
                 return loss
             else:
@@ -279,30 +285,31 @@ class FastGramDynamicMemoryCatsinom(pl.LightningModule):
 
         y_hat = self.forward(x.float())
 
+        y_sig = torch.sigmoid(y_hat)
+
+        y_sig = (y_sig > self.t).long()
+        acc = (y[:, None] == y_sig).float().sum() / len(y)
+
         res = res[0]
         self.log_dict({f'val_loss_{res}': self.loss(y_hat, y[:, None].float()),
-                       f'val_mae_{res}': self.mae(y_hat, y[:, None].float())})
+                       f'val_acc_{res}': acc})
 
-    def validation_end(self, outputs):
-        val_mean = dict()
-        res_count = dict()
+        #return {f'val_loss_{res}': self.loss(y_hat, y[:, None].float()), f'val_acc_{res}': acc}
 
-        for output in outputs:
+    #def validation_epoch_end(self, outputs):
+    #    val_mean = dict()
+    #    res_count = dict()
 
-            for k in output.keys():
-                if k not in val_mean.keys():
-                    val_mean[k] = 0
-                    res_count[k] = 0
+    #    for output in outputs:
+    #        for k in output.keys():
+    #            val_mean[k] = torch.stack([x[k] for x in outputs]).mean()
 
-                val_mean[k] += output[k]
-                res_count[k] += 1
-
-        tensorboard_logs = dict()
-        for k in val_mean.keys():
-            # tensorboard_logs[k] = val_mean[k]/res_count[k]
-            self.log(k, val_mean[k] / res_count[k])
-
-        return {'log': tensorboard_logs}
+    #    tensorboard_logs = dict()
+    #    for k in val_mean.keys():
+    #        # tensorboard_logs[k] = val_mean[k]/res_count[k]
+    #        self.log(k, val_mean[k] / res_count[k])
+    #        print(k, val_mean[k] / res_count[k])
+    #    return {'log': tensorboard_logs}
 
     def forward(self, x):
         return self.model(x)
@@ -398,10 +405,9 @@ class DynamicMemory():
 
         self.img_size = (512, 512)
 
-    def check_outlier_memory(self):
-        print(len(self.outlier_memory), 'len outlier memory')
-        print(self.domaincomplete)
-        if len(self.outlier_memory)>10:
+    def check_outlier_memory(self, budget):
+        if len(self.outlier_memory)>10 and int(budget)>=5:
+            print(len(self.outlier_memory))
             outlier_grams = [o.current_grammatrix for o in self.outlier_memory]
             # TODO: have to do a pre selection of cache elements here based on, shouldnt add a new pseudodomain if memory is to far spread
             # Add up all pairwise distances if median distance smaller than threshold insert new domain.
@@ -417,19 +423,22 @@ class DynamicMemory():
 
             to_delete = []
             for k, p in enumerate(clf.predict(outlier_grams)):
-                if p == 1:
-                    idx = self.find_insert_position()
-                    if idx != -1:
-                        elem = self.outlier_memory[k]
-                        elem.pseudo_domain = new_domain_label
-                        self.memorylist[idx] = elem
-                        self.domaincounter[new_domain_label] += 1
-                        to_delete.append(self.outlier_memory[k])
+                if int(budget)>0:
+                    if p == 1:
+                        idx = self.find_insert_position()
+                        if idx != -1:
+                            elem = self.outlier_memory[k]
+                            elem.pseudo_domain = new_domain_label
+                            self.memorylist[idx] = elem
+                            self.domaincounter[new_domain_label] += 1
+                            to_delete.append(self.outlier_memory[k])
+                            budget -= 1.0
 
             for elem in to_delete:
                 self.outlier_memory.remove(elem)
 
             self.isoforests[new_domain_label] = clf
+        return budget
 
     def find_insert_position(self):
         for idx, item in enumerate(self.memorylist):
@@ -438,7 +447,6 @@ class DynamicMemory():
         return -1
 
     def flag_items_for_deletion(self):
-        #TODO find a smart way to do this
         for k, v in self.domaincomplete.items():
             domain_count = len(self.get_domainitems(k))
             if domain_count>self.max_per_domain:
@@ -458,7 +466,7 @@ class DynamicMemory():
             if item.counter>self.outlier_epochs:
                 self.outlier_memory.remove(item)
 
-    def insert_element(self, item):
+    def insert_element(self, item, budget):
         if self.transformer is not None:
             item.current_grammatrix = self.transformer.transform(item.current_grammatrix.reshape(1, -1))
             item.current_grammatrix = item.current_grammatrix[0]
@@ -471,7 +479,7 @@ class DynamicMemory():
             #check outlier memory for new clusters
             self.outlier_memory.append(item)
         else:
-            if not self.domaincomplete[domain]:
+            if not self.domaincomplete[domain] and int(budget)>0:
                 #insert into dynamic memory and training
                 idx = self.find_insert_position()
                 if idx == -1: # no free memory position, replace an element already in memory
@@ -499,9 +507,9 @@ class DynamicMemory():
                 clf.__setattr__('n_estimators', n_estimators)
                 clf.fit(domain_grams)
                 self.isoforests[domain] = clf
+                budget -= 1.0
 
-            else:
-                print('inlier ', domain)
+        return budget
 
 
     def check_pseudodomain(self, grammatrix):
@@ -516,7 +524,7 @@ class DynamicMemory():
 
         return current_domain
 
-    def get_training_batch(self, batchsize, batches=1): #TODO: force new items!!
+    def get_training_batch(self, batchsize, batches=1):
 
         xs = []
         ys = []
