@@ -39,7 +39,7 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
         self.train_counter = 0
 
         self.budget = 0.0
-        self.budgetrate = 1/10
+        self.budgetrate = 1/self.hparams.allowedlabelratio
 
         self.to(device)
         print('init')
@@ -126,6 +126,7 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
         hparams['seed'] = 2314134
         hparams['completion_limit'] = 4.0
         hparams['gradient_clip_val'] = 0
+        hparams['allowedlabelratio'] = 10
 
         return hparams
 
