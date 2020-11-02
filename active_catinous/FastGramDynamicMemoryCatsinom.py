@@ -14,47 +14,35 @@ import torch.nn as nn
 import torch.nn.functional as F
 from pytorch_lightning import Trainer
 from torch.utils.data import DataLoader
-from models.AgePredictor import EncoderRegressor
-from models.unet3d import EncoderModelGenesis
-
-
 from sklearn.ensemble import IsolationForest
 from sklearn.random_projection import SparseRandomProjection
+from datasets.CatsinomDataset import Catsinom_Dataset_CatineousStream, CatsinomDataset
 
-from datasets.BrainAgeContinuous import BrainAgeContinuous
-from datasets.BrainAgeDataset import BrainAgeDataset
+from sklearn.metrics import accuracy_score
+import torchvision.models as models
 
-from sklearn.metrics import mean_absolute_error
 
 from . import utils
 
-class FastGramDynamicMemoryBrainAge(pl.LightningModule):
+class FastGramDynamicMemoryCatsinom(pl.LightningModule):
 
     def __init__(self, hparams={}, device=torch.device('cpu'), verbose=False):
-        super(FastGramDynamicMemoryBrainAge, self).__init__()
+        super(FastGramDynamicMemoryCatsinom, self).__init__()
         self.hparams = utils.default_params(self.get_default_hparams(), hparams)
         self.hparams = argparse.Namespace(**self.hparams)
 
         self.learning_rate = self.hparams.learning_rate
-        self.train_counter = 0
 
-        self.budget = 0.0
-        self.budgetrate = 1/10
+        self.train_counter = 0
 
         self.to(device)
         print('init')
 
-        self.stylemodel = EncoderModelGenesis()
+        self.stylemodel = models.resnet50(pretrained=True)
 
-        # Load pretrained model genesis
-        weight_dir = 'models/Genesis_Chest_CT.pt'
-        checkpoint = torch.load(weight_dir)
-        state_dict = checkpoint['state_dict']
-        unParalled_state_dict = {}
-        for key in state_dict.keys():
-            if key.startswith('module.down_'):
-                unParalled_state_dict[key.replace("module.", "")] = state_dict[key]
-        self.stylemodel.load_state_dict(unParalled_state_dict)
+        self.stylemodel.to(device)
+        self.stylemodel.eval()
+
 
         if self.hparams.use_memory and self.hparams.continous:
             self.init_cache_and_gramhooks()
@@ -69,10 +57,9 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
                              'direction')
             self.hparams.use_memory = False
 
-        self.stylemodel.to(device)
-        self.stylemodel.eval()
-
-        self.model = EncoderRegressor()
+        self.model = models.resnet50(pretrained=True)
+        self.model.fc = nn.Sequential(
+            *[nn.Linear(2048, 512), nn.BatchNorm1d(512), nn.Linear(512, 1)])
         self.model.to(device)
         if not self.hparams.base_model is None:
             state_dict =  torch.load(os.path.join(utils.TRAINED_MODELS_FOLDER, self.hparams.base_model))
@@ -82,8 +69,11 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
             self.model.load_state_dict(new_state_dict)
 
 
-        self.loss = nn.MSELoss()
+        self.loss = nn.BCEWithLogitsLoss()
         self.mae = nn.L1Loss()
+
+        self.t = torch.tensor([0.5]).to(device)
+
 
         self.shiftcheckpoint_1 = False
         self.shiftcheckpoint_2 = False
@@ -93,12 +83,11 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
             initmemoryelements = self.getmemoryitems_from_base(num_items=self.hparams.memorymaximum)
 
             #PREFILL memory with base training samples!!!!
-            self.trainingsmemory = DynamicMemoryAge(initelements=initmemoryelements,
+            self.trainingsmemory = DynamicMemory(initelements=initmemoryelements,
                                                     memorymaximum=self.hparams.memorymaximum,
                                                    gram_weights=self.hparams.gram_weights,
                                                     seed=self.hparams.seed)
 
-            print(len(self.trainingsmemory.get_domainitems(0)))
 
         if verbose:
             pprint(vars(self.hparams))
@@ -106,16 +95,17 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
     @staticmethod
     def get_default_hparams():
         hparams = dict()
-        hparams['datasetfile'] = '/project/catinous/brainds_split.csv'
+        hparams['root_dir'] = '/project/catinous/cat_data/'
+        hparams['datasetfile'] = 'catsinom_combined_dsts3_dataset.csv'
         hparams['batch_size'] = 8
         hparams['training_batch_size'] = 8
-        hparams['transition_phase_after'] = 0.8
+        hparams['transition_phase_after'] = 0.7
         hparams['memorymaximum'] = 128
         hparams['use_memory'] = True
         hparams['balance_memory'] = True
         hparams['random_memory'] = False
         hparams['force_misclassified'] = True
-        hparams['order'] = ['1.5T Philips', '3.0T Philips', '3.0T']
+        hparams['order'] = ['lr', 'hr', 'hr_ts']
         hparams['continuous'] = True
         hparams['noncontinuous_steps'] = 3000
         hparams['noncontinuous_train_splits'] = ['base_train']
@@ -124,24 +114,26 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
         hparams['run_postfix'] = '1'
         hparams['gram_weights'] = [1, 1, 1, 1]
         hparams['seed'] = 2314134
-        hparams['completion_limit'] = 4.0
         hparams['gradient_clip_val'] = 0
+        hparams['completion_limit'] = 0.85
 
         return hparams
 
     def getmemoryitems_from_base(self, num_items=128):
-        dl = DataLoader(BrainAgeDataset(self.hparams.datasetfile,
+        dl = DataLoader(CatsinomDataset(self.hparams.root_dir,
+                                        self.hparams.datasetfile,
                                    iterations=None,
                                    batch_size=self.hparams.batch_size,
-                                   split=['base_train']),
-                   batch_size=self.hparams.batch_size, num_workers=4, pin_memory=True)
+                                   split=['base_train'],
+                                        res='lr'),
+                   batch_size=self.hparams.batch_size, num_workers=4, pin_memory=True, shuffle=True)
 
         memoryitems = []
         for batch in dl:
             torch.cuda.empty_cache()
 
 
-            x, y, scanner, filepath = batch
+            x, y, filepath, scanner = batch
             x = x.to(self.device)
             y_style = self.stylemodel(x.float())
 
@@ -161,31 +153,30 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
 
     def init_cache_and_gramhooks(self):
         self.grammatrices = []
-        #self.gramlayers = [self.stylemodel.layer1[-1].conv1,
-        #                   self.stylemodel.layer2[-1].conv1,
+        self.gramlayers = [
+                           self.stylemodel.layer2[-1].conv1]
         #                   self.stylemodel.layer3[-1].conv1,
         #                   self.stylemodel.layer4[-1].conv1]
-        self.gramlayers = [self.stylemodel.down_tr64.ops[1].conv1]
         self.register_hooks()
         logging.info('Gram hooks and memory initialized. Cachesize: %i' % self.hparams.memorymaximum)
 
-    def gram_matrix_3d(self, input):
+    def gram_matrix(self, input):
         # taken from: https://pytorch.org/tutorials/advanced/neural_style_tutorial.html
-        a, b, c, d, e = input.size()  # a=batch size(=1)
+        a, b, c, d = input.size()  # a=batch size(=1)
         # b=number of feature maps
         # (c,d)=dimensions of a f. map (N=c*d)
 
         grams = []
 
         for i in range(a):
-            features = input[i].view(b, c * d * e)  # resise F_XL into \hat F_XL
+            features = input[i].view(b, c * d)  # resise F_XL into \hat F_XL
             G = torch.mm(features, features.t())  # compute the gram product
-            grams.append(G.div(b * c * d * e))
+            grams.append(G.div(b * c * d))
 
         return grams
 
     def gram_hook(self, m, input, output):
-        self.grammatrices.append(self.gram_matrix_3d(input[0]))
+        self.grammatrices.append(self.gram_matrix(input[0]))
 
     def register_hooks(self):
         for layer in self.gramlayers:
@@ -194,20 +185,17 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         x, y, filepath, scanner = batch
 
-        self.budget += len(filepath) * self.budgetrate
-        print(self.budget)
-
         #TODO: insert checkpoints for BWT/FWT calculation here
 
-        if ('1.5T Philips' in scanner) and ('3.0T Philips' in scanner):  # this is not the most elegant thing to do
+        if ('lr' in scanner) and ('hr' in scanner):  # this is not the most elegant thing to do
             if not self.shiftcheckpoint_1:
-                exp_name = utils.get_expname(self.hparams)
+                exp_name = utils.get_expname(self.hparams, task='catsinom')
                 weights_path = utils.TRAINED_MODELS_FOLDER + exp_name + '_shift_1_ckpt.pt'
                 torch.save(self.model.state_dict(), weights_path)
                 self.shiftcheckpoint_1 = True
-        elif ('3.0T Philips' in scanner) and ('3.0T' in scanner):
+        elif ('hr' in scanner) and ('hr_ts' in scanner):
             if not self.shiftcheckpoint_2:
-                exp_name = utils.get_expname(self.hparams)
+                exp_name = utils.get_expname(self.hparams, task='catsinom')
                 weights_path = utils.TRAINED_MODELS_FOLDER + exp_name + '_shift_2_ckpt.pt'
                 torch.save(self.model.state_dict(), weights_path)
                 self.shiftcheckpoint_2 = True
@@ -223,9 +211,9 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
                 grammatrix = [bg[i].detach().cpu().numpy().flatten() for bg in self.grammatrices]
 
                 new_mi = MemoryItem(img, y[i], filepath[i], scanner[i], grammatrix[0])
-                self.budget = self.trainingsmemory.insert_element(new_mi, self.budget)
+                self.trainingsmemory.insert_element(new_mi)
 
-            self.budget = self.trainingsmemory.check_outlier_memory(self.budget)
+            self.trainingsmemory.check_outlier_memory()
             self.trainingsmemory.counter_outlier_memory()
 
             #form trainings X domain balanced batches to train one epoch on all newly inserted samples
@@ -242,12 +230,15 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
                                 x = x[None, :].to(self.device)
                                 true.append(item.label)
                                 outy = self.model(x.float())
-                                preds.append(outy.detach().cpu().numpy()[0])
+                                outy_sig = torch.sigmoid(outy)
+                                outy_sig = (outy_sig > self.t).long()
+                                preds.append(outy_sig.detach().cpu().numpy()[0])
                                 # mae = self.mae(y, outy)
                                 # error += mae.item()
 
-                            error = mean_absolute_error(true, preds)
-                            if error <= self.hparams.completion_limit:
+                            acc = accuracy_score(true, preds)
+                            print(acc, 'training domain k', k)
+                            if acc >= self.hparams.completion_limit:
                                 self.trainingsmemory.domaincomplete[k] = True
 
                 self.train()
@@ -269,6 +260,7 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
 
                 self.train_counter += 1
                 self.log('train_loss', loss)
+                print('return train loss', loss.item())
 
                 return loss
             else:
@@ -349,29 +341,31 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
         #return torch.optim.Adam(self.parameters(), lr=0.00005)
         return torch.optim.Adam(self.parameters(), lr=self.learning_rate)
 
-
-
     #@pl.data_loader
     def train_dataloader(self):
         if self.hparams.continous:
-            return DataLoader(BrainAgeContinuous(self.hparams.datasetfile,
+            return DataLoader(Catsinom_Dataset_CatineousStream(self.hparams.root_dir,
+                                                               self.hparams.datasetfile,
                                                                transition_phase_after=self.hparams.transition_phase_after),
-                              batch_size=self.hparams.batch_size, num_workers=4, drop_last=True, pin_memory=True)
+                              batch_size=self.hparams.batch_size, num_workers=2, drop_last=True)
         else:
-            return DataLoader(BrainAgeDataset(self.hparams.datasetfile,
+            return DataLoader(CatsinomDataset(self.hparams.root_dir,
+                                              self.hparams.datasetfile,
                                               iterations=self.hparams.noncontinous_steps,
                                               batch_size=self.hparams.batch_size,
                                               split=self.hparams.noncontinous_train_splits),
-                              batch_size=self.hparams.batch_size, num_workers=4, pin_memory=True)
+                              batch_size=self.hparams.batch_size, num_workers=2)
 
     #@pl.data_loader
     def val_dataloader(self):
-        return DataLoader(BrainAgeDataset(self.hparams.datasetfile,
+        return DataLoader(CatsinomDataset(self.hparams.root_dir,
+                                          self.hparams.datasetfile,
                                           split='val'),
                           batch_size=4,
-                          num_workers=2, pin_memory=True, drop_last=True)
+                          num_workers=1)
 
-class DynamicMemoryAge():
+
+class DynamicMemory():
 
     def __init__(self, initelements, memorymaximum=256, gram_weights=None, seed=None):
         self.memoryfull = False
@@ -391,9 +385,9 @@ class DynamicMemoryAge():
         self.transformer.fit(graminits)
 
         for mi in initelements:
-            mi.current_grammatrix = self.transformer.transform(mi.current_grammatrix.reshape(1, -1))
+            mi.current_grammatrix = self.transformer.transform(mi.current_grammatrix.reshape(1, -1))[0]
 
-        trans_initelements = self.transformer.transform(graminits)
+        trans_initelements = [mi.current_grammatrix for mi in initelements]
         clf = IsolationForest(n_estimators=10, random_state=seed).fit(trans_initelements)
         self.isoforests = {0: clf}
 
@@ -402,9 +396,11 @@ class DynamicMemoryAge():
         self.outlier_memory = []
         self.outlier_epochs = 25
 
-        self.img_size = (64, 128, 128)
+        self.img_size = (512, 512)
 
-    def check_outlier_memory(self, budget):
+    def check_outlier_memory(self):
+        print(len(self.outlier_memory), 'len outlier memory')
+        print(self.domaincomplete)
         if len(self.outlier_memory)>10:
             outlier_grams = [o.current_grammatrix for o in self.outlier_memory]
             # TODO: have to do a pre selection of cache elements here based on, shouldnt add a new pseudodomain if memory is to far spread
@@ -421,24 +417,19 @@ class DynamicMemoryAge():
 
             to_delete = []
             for k, p in enumerate(clf.predict(outlier_grams)):
-                if int(budget)>0:
-                    if p == 1:
-                        idx = self.find_insert_position()
-                        if idx != -1:
-                            elem = self.outlier_memory[k]
-                            elem.pseudo_domain = new_domain_label
-                            self.memorylist[idx] = elem
-                            self.domaincounter[new_domain_label] += 1
-                            to_delete.append(self.outlier_memory[k])
-                            budget-=1.0
-                else:
-                    print('run out of budget ', budget)
+                if p == 1:
+                    idx = self.find_insert_position()
+                    if idx != -1:
+                        elem = self.outlier_memory[k]
+                        elem.pseudo_domain = new_domain_label
+                        self.memorylist[idx] = elem
+                        self.domaincounter[new_domain_label] += 1
+                        to_delete.append(self.outlier_memory[k])
+
             for elem in to_delete:
                 self.outlier_memory.remove(elem)
 
             self.isoforests[new_domain_label] = clf
-
-        return budget
 
     def find_insert_position(self):
         for idx, item in enumerate(self.memorylist):
@@ -467,7 +458,7 @@ class DynamicMemoryAge():
             if item.counter>self.outlier_epochs:
                 self.outlier_memory.remove(item)
 
-    def insert_element(self, item, budget):
+    def insert_element(self, item):
         if self.transformer is not None:
             item.current_grammatrix = self.transformer.transform(item.current_grammatrix.reshape(1, -1))
             item.current_grammatrix = item.current_grammatrix[0]
@@ -480,7 +471,7 @@ class DynamicMemoryAge():
             #check outlier memory for new clusters
             self.outlier_memory.append(item)
         else:
-            if not self.domaincomplete[domain] and int(budget)>0:
+            if not self.domaincomplete[domain]:
                 #insert into dynamic memory and training
                 idx = self.find_insert_position()
                 if idx == -1: # no free memory position, replace an element already in memory
@@ -496,12 +487,22 @@ class DynamicMemoryAge():
                     self.domaincounter[domain] += 1
                 self.memorylist[idx] = item
 
-                budget -= 1.0
-            else:
-                if int(budget)<1:
-                    print('run out of budget ', budget)
+                # add tree to clf of domain
+                clf = self.isoforests[domain]
+                domain_items = self.get_domainitems(domain)
+                domain_grams = [d.current_grammatrix for d in domain_items]
 
-        return budget
+                if len(clf.estimators_) < 10:
+                    n_estimators = len(clf.estimators_) + 1
+                else:
+                    n_estimators = 10
+                clf.__setattr__('n_estimators', n_estimators)
+                clf.fit(domain_grams)
+                self.isoforests[domain] = clf
+
+            else:
+                print('inlier ', domain)
+
 
     def check_pseudodomain(self, grammatrix):
         max_pred = 0
@@ -509,7 +510,6 @@ class DynamicMemoryAge():
 
         for j, clf in self.isoforests.items():
             current_pred = clf.decision_function(grammatrix.reshape(1, -1))
-
             if current_pred>max_pred:
                 current_domain = j
                 max_pred = current_pred
@@ -534,7 +534,7 @@ class DynamicMemoryAge():
         for b in range(batches):
             j = 0
             bs = batchsize
-            x = torch.empty(size=(batchsize, 1, self.img_size[0], self.img_size[1], self.img_size[2]))
+            x = torch.empty(size=(batchsize, 3, self.img_size[0], self.img_size[1]))
             y = torch.empty(size=(batchsize, 1))
 
             random.shuffle(to_force)
@@ -582,8 +582,8 @@ def trained_model(hparams):
         device = torch.device('cuda')
     else:
         device = torch.device('cpu')
-    model = FastGramDynamicMemoryBrainAge(hparams=hparams, device=device)
-    exp_name = utils.get_expname(model.hparams)
+    model = FastGramDynamicMemoryCatsinom(hparams=hparams, device=device)
+    exp_name = utils.get_expname(model.hparams, task='catsinom')
     weights_path = utils.TRAINED_MODELS_FOLDER + exp_name +'.pt'
 
     if not os.path.exists(utils.TRAINED_MODELS_FOLDER + exp_name + '.pt'):
@@ -616,12 +616,12 @@ def trained_model(hparams):
     return model, logs, df_memory, exp_name +'.pt'
 
 def is_cached(hparams):
-    model = FastGramDynamicMemoryBrainAge(hparams=hparams)
-    exp_name = utils.get_expname(model.hparams)
+    model = FastGramDynamicMemoryCatsinom(hparams=hparams)
+    exp_name = utils.get_expname(model.hparams, task='catsinom')
     return os.path.exists(utils.TRAINED_MODELS_FOLDER + exp_name + '.pt')
 
 
 def cached_path(hparams):
-    model = FastGramDynamicMemoryBrainAge(hparams=hparams)
-    exp_name = utils.get_expname(model.hparams)
+    model = FastGramDynamicMemoryCatsinom(hparams=hparams)
+    exp_name = utils.get_expname(model.hparams, task='catsinom')
     return utils.TRAINED_MODELS_FOLDER + exp_name + '.pt'

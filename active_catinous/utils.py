@@ -31,7 +31,7 @@ def default_params(dparams, params):
                 matched_params[key] = default_params(dparams[key], params[key])
     return matched_params
 
-def get_expname(hparams):
+def get_expname(hparams, task=None):
     if type(hparams) is argparse.Namespace:
         hparams = vars(hparams).copy()
     elif type(hparams) is AttributeDict:
@@ -39,7 +39,12 @@ def get_expname(hparams):
 
     hashed_params = hash(hparams, length=10)
 
-    expname = 'cont' if hparams['continuous'] else 'batch'
+    if task is None:
+        expname = 'cont' if hparams['continuous'] else 'batch'
+    else:
+        expname = task
+        expname += '_cont' if hparams['continuous'] else '_batch'
+
     expname += '_' + os.path.splitext(os.path.basename(hparams['datasetfile']))[0]
     if hparams['base_model']:
         expname += '_basemodel_' + hparams['base_model'].split('_')[1]
