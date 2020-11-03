@@ -26,6 +26,8 @@ from datasets.BrainAgeDataset import BrainAgeDataset
 
 from sklearn.metrics import mean_absolute_error
 
+from scipy.spatial.distance import pdist, squareform
+
 from . import utils
 
 class FastGramDynamicMemoryBrainAge(pl.LightningModule):
@@ -38,7 +40,7 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
         self.learning_rate = self.hparams.learning_rate
         self.train_counter = 0
 
-        self.budget = 0.0
+        self.budget = 100.0
         self.budgetrate = 1/self.hparams.allowedlabelratio
 
         self.to(device)
@@ -56,7 +58,7 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
                 unParalled_state_dict[key.replace("module.", "")] = state_dict[key]
         self.stylemodel.load_state_dict(unParalled_state_dict)
 
-        if self.hparams.use_memory and self.hparams.continous:
+        if self.hparams.use_memory and self.hparams.continuous:
             self.init_cache_and_gramhooks()
         else:
             if verbose:
@@ -88,7 +90,7 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
         self.shiftcheckpoint_1 = False
         self.shiftcheckpoint_2 = False
 
-        if self.hparams.continous:
+        if self.hparams.continuous:
 
             initmemoryelements = self.getmemoryitems_from_base(num_items=self.hparams.memorymaximum)
 
@@ -219,6 +221,8 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
             self.grammatrices = []
             y_style = self.stylemodel(x.float())
 
+            budget_before = self.budget
+
             for i, img in enumerate(x):
                 grammatrix = [bg[i].detach().cpu().numpy().flatten() for bg in self.grammatrices]
 
@@ -229,7 +233,8 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
             self.trainingsmemory.counter_outlier_memory()
 
             #form trainings X domain balanced batches to train one epoch on all newly inserted samples
-            if not np.all(list(self.trainingsmemory.domaincomplete.values())): #only train when a domain is incomplete
+            #print(self.trainingsmemory.domaincomplete.items())
+            if not np.all(list(self.trainingsmemory.domaincomplete.values())) and budget_before!=self.budget: #only train when a domain is incomplete and new samples are inserted?
                 self.eval()
                 for k, v in self.trainingsmemory.domaincomplete.items():
                     if not v:
@@ -332,23 +337,23 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
 
     #@pl.data_loader
     def train_dataloader(self):
-        if self.hparams.continous:
+        if self.hparams.continuous:
             return DataLoader(BrainAgeContinuous(self.hparams.datasetfile,
                                                                transition_phase_after=self.hparams.transition_phase_after),
-                              batch_size=self.hparams.batch_size, num_workers=4, drop_last=True, pin_memory=True)
+                              batch_size=self.hparams.batch_size, num_workers=4, drop_last=True, pin_memory=False)
         else:
             return DataLoader(BrainAgeDataset(self.hparams.datasetfile,
                                               iterations=self.hparams.noncontinous_steps,
                                               batch_size=self.hparams.batch_size,
                                               split=self.hparams.noncontinous_train_splits),
-                              batch_size=self.hparams.batch_size, num_workers=4, pin_memory=True)
+                              batch_size=self.hparams.batch_size, num_workers=4, pin_memory=False)
 
     #@pl.data_loader
     def val_dataloader(self):
         return DataLoader(BrainAgeDataset(self.hparams.datasetfile,
                                           split='val'),
                           batch_size=4,
-                          num_workers=2, pin_memory=True, drop_last=True)
+                          num_workers=2, pin_memory=False, drop_last=True)
 
 class DynamicMemoryAge():
 
@@ -388,34 +393,42 @@ class DynamicMemoryAge():
             outlier_grams = [o.current_grammatrix for o in self.outlier_memory]
             # TODO: have to do a pre selection of cache elements here based on, shouldnt add a new pseudodomain if memory is to far spread
             # Add up all pairwise distances if median distance smaller than threshold insert new domain.
-            clf = IsolationForest(n_estimators=5, random_state=self.seed, warm_start=True, contamination=0.10).fit(
-                outlier_grams)
 
-            new_domain_label = len(self.isoforests)
-            self.domaincomplete[new_domain_label] = False
-            self.domaincounter[new_domain_label] = 0
-            self.max_per_domain = int(self.memorymaximum/(new_domain_label+1))
+            distances = squareform(pdist(outlier_grams)) #distances to see the compactness of memory
+            #print(sorted([np.array(sorted(d)[:6]).sum() for d in distances]),
+            #      sorted([np.array(sorted(d)[:6]).sum() for d in distances])[5])
 
-            self.flag_items_for_deletion()
 
-            to_delete = []
-            for k, p in enumerate(clf.predict(outlier_grams)):
-                if int(budget)>0:
-                    if p == 1:
-                        idx = self.find_insert_position()
-                        if idx != -1:
-                            elem = self.outlier_memory[k]
-                            elem.pseudo_domain = new_domain_label
-                            self.memorylist[idx] = elem
-                            self.domaincounter[new_domain_label] += 1
-                            to_delete.append(self.outlier_memory[k])
-                            budget -= 1.0
-                else:
-                    print('run out of budget ', budget)
-            for elem in to_delete:
-                self.outlier_memory.remove(elem)
+            if sorted([np.array(sorted(d)[:6]).sum() for d in distances])[5]<0.15:
 
-            self.isoforests[new_domain_label] = clf
+                clf = IsolationForest(n_estimators=5, random_state=self.seed, warm_start=True, contamination=0.10).fit(
+                    outlier_grams)
+
+                new_domain_label = len(self.isoforests)
+                self.domaincomplete[new_domain_label] = False
+                self.domaincounter[new_domain_label] = 0
+                self.max_per_domain = int(self.memorymaximum/(new_domain_label+1))
+
+                self.flag_items_for_deletion()
+
+                to_delete = []
+                for k, p in enumerate(clf.predict(outlier_grams)):
+                    if int(budget)>0:
+                        if p == 1:
+                            idx = self.find_insert_position()
+                            if idx != -1:
+                                elem = self.outlier_memory[k]
+                                elem.pseudo_domain = new_domain_label
+                                self.memorylist[idx] = elem
+                                self.domaincounter[new_domain_label] += 1
+                                to_delete.append(self.outlier_memory[k])
+                                budget -= 1.0
+                    else:
+                        print('run out of budget ', budget)
+                for elem in to_delete:
+                    self.outlier_memory.remove(elem)
+
+                self.isoforests[new_domain_label] = clf
 
         return budget
 
@@ -481,9 +494,10 @@ class DynamicMemoryAge():
 
                 if len(clf.estimators_) < 10:
                     n_estimators = len(clf.estimators_) + 1
+                    clf.__setattr__('n_estimators', n_estimators)
                 else:
-                    n_estimators = 10
-                clf.__setattr__('n_estimators', n_estimators)
+                    clf = IsolationForest(n_estimators=10, random_state=16131345)
+
                 clf.fit(domain_grams)
                 self.isoforests[domain] = clf
 
