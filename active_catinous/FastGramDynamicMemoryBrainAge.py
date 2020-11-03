@@ -291,27 +291,6 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
         self.log_dict({f'val_loss_{res}': self.loss(y_hat, y[:, None].float()),
                        f'val_mae_{res}': self.mae(y_hat, y[:, None].float())})
 
-    def validation_epoch_end(self, outputs):
-        val_mean = dict()
-        res_count = dict()
-
-        for output in outputs:
-
-            for k in output.keys():
-                if k not in val_mean.keys():
-                    val_mean[k] = 0
-                    res_count[k] = 0
-
-                val_mean[k] += output[k]
-                res_count[k] += 1
-
-        tensorboard_logs = dict()
-        for k in val_mean.keys():
-            # tensorboard_logs[k] = val_mean[k]/res_count[k]
-            self.log(k, val_mean[k] / res_count[k])
-
-        return {'log': tensorboard_logs}
-
     def forward(self, x):
         return self.model(x)
 
