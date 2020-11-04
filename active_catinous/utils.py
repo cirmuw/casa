@@ -84,7 +84,7 @@ def sort_dict(input_dict):
 def save_memory_to_csv(memory, savepath):
     df_cache = pd.DataFrame({'filepath':[ci.filepath for ci in memory],
                              'label': [ci.label.cpu().numpy() for ci in memory],
-                             'res': [ci.res for ci in memory],
+                             'scanner': [ci.scanner for ci in memory],
                              'pseudo_domain':  [ci.pseudo_domain for ci in memory],
                              'traincounter': [ci.traincounter for ci in memory]})
     df_cache.to_csv(savepath, index=False, index_label=False)
