@@ -47,7 +47,7 @@ class FastGramDynamicMemoryCatsinom(pl.LightningModule):
         self.stylemodel.eval()
 
 
-        if self.hparams.use_memory and self.hparams.continous:
+        if self.hparams.use_memory and self.hparams.continuous:
             self.init_cache_and_gramhooks()
         else:
             if verbose:
@@ -81,7 +81,7 @@ class FastGramDynamicMemoryCatsinom(pl.LightningModule):
         self.shiftcheckpoint_1 = False
         self.shiftcheckpoint_2 = False
 
-        if self.hparams.continous:
+        if self.hparams.continuous:
 
             initmemoryelements = self.getmemoryitems_from_base(num_items=self.hparams.memorymaximum)
 
@@ -350,7 +350,7 @@ class FastGramDynamicMemoryCatsinom(pl.LightningModule):
 
     #@pl.data_loader
     def train_dataloader(self):
-        if self.hparams.continous:
+        if self.hparams.continuous:
             return DataLoader(Catsinom_Dataset_CatineousStream(self.hparams.root_dir,
                                                                self.hparams.datasetfile,
                                                                transition_phase_after=self.hparams.transition_phase_after),
@@ -604,14 +604,14 @@ def trained_model(hparams):
         print('train counter', model.train_counter)
         model.freeze()
         torch.save(model.state_dict(), weights_path)
-        if model.hparams.continous and model.hparams.use_memory:
+        if model.hparams.continuous and model.hparams.use_memory:
             utils.save_memory_to_csv(model.trainingsmemory.memorylist, utils.TRAINED_MEMORY_FOLDER + exp_name + '.csv')
     else:
         print('Read: ' + weights_path)
         model.load_state_dict(torch.load(weights_path, map_location=torch.device('cpu')))
         model.freeze()
 
-    if model.hparams.continous and model.hparams.use_memory:
+    if model.hparams.continuous and model.hparams.use_memory:
         if os.path.exists(utils.TRAINED_MEMORY_FOLDER + exp_name + '.csv'):
             df_memory = pd.read_csv(utils.TRAINED_MEMORY_FOLDER + exp_name + '.csv')
         else:

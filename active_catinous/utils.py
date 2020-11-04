@@ -53,7 +53,7 @@ def get_expname(hparams, task=None):
         expname += '_cache' if hparams['use_cache'] else '_nocache'
         expname += '_tf{}'.format(str(hparams['transition_phase_after']).replace('.', ''))
     else:
-        expname += '_' + '-'.join(hparams['noncontinous_train_splits'])
+        expname += '_' + '-'.join(hparams['noncontinuous_train_splits'])
     expname += '_'+str(hparams['run_postfix'])
     expname += '_'+hashed_params
     return expname
