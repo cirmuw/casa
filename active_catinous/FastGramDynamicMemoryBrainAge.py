@@ -129,6 +129,7 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
         hparams['completion_limit'] = 4.0
         hparams['gradient_clip_val'] = 0
         hparams['allowedlabelratio'] = 10
+        hparams['scanner'] = None
 
         return hparams
 
@@ -343,9 +344,10 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
                               batch_size=self.hparams.batch_size, num_workers=4, drop_last=True, pin_memory=False)
         else:
             return DataLoader(BrainAgeDataset(self.hparams.datasetfile,
-                                              iterations=self.hparams.noncontinous_steps,
+                                              iterations=self.hparams.noncontinuous_steps,
                                               batch_size=self.hparams.batch_size,
-                                              split=self.hparams.noncontinous_train_splits),
+                                              split=self.hparams.noncontinuous_train_steps,
+                                              res=self.hparams.scanner),
                               batch_size=self.hparams.batch_size, num_workers=4, pin_memory=False)
 
     #@pl.data_loader
@@ -589,7 +591,7 @@ def trained_model(hparams):
     model = FastGramDynamicMemoryBrainAge(hparams=hparams, device=device)
     exp_name = utils.get_expname(model.hparams)
     weights_path = utils.TRAINED_MODELS_FOLDER + exp_name +'.pt'
-
+    print(weights_path)
     if not os.path.exists(utils.TRAINED_MODELS_FOLDER + exp_name + '.pt'):
         logger = pllogging.TestTubeLogger(utils.LOGGING_FOLDER, name=exp_name)
         trainer = Trainer(gpus=1, max_epochs=1, logger=logger,
@@ -600,14 +602,14 @@ def trained_model(hparams):
         print('train counter', model.train_counter)
         model.freeze()
         torch.save(model.state_dict(), weights_path)
-        if model.hparams.continous and model.hparams.use_memory:
+        if model.hparams.continuous and model.hparams.use_memory:
             utils.save_memory_to_csv(model.trainingsmemory.memorylist, utils.TRAINED_MEMORY_FOLDER + exp_name + '.csv')
     else:
         print('Read: ' + weights_path)
         model.load_state_dict(torch.load(weights_path, map_location=torch.device('cpu')))
         model.freeze()
 
-    if model.hparams.continous and model.hparams.use_memory:
+    if model.hparams.continuous and model.hparams.use_memory:
         if os.path.exists(utils.TRAINED_MEMORY_FOLDER + exp_name + '.csv'):
             df_memory = pd.read_csv(utils.TRAINED_MEMORY_FOLDER + exp_name + '.csv')
         else:
