@@ -347,7 +347,7 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
             return DataLoader(BrainAgeDataset(self.hparams.datasetfile,
                                               iterations=self.hparams.noncontinuous_steps,
                                               batch_size=self.hparams.batch_size,
-                                              split=self.hparams.noncontinuous_train_steps,
+                                              split=self.hparams.noncontinuous_train_splits,
                                               res=self.hparams.scanner),
                               batch_size=self.hparams.batch_size, num_workers=4, pin_memory=False)
 
