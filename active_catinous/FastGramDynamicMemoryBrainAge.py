@@ -550,6 +550,7 @@ class DynamicMemoryAge():
                     x[j] = mi.img
                     y[j] = mi.label
                     j += 1
+                    mi.traincounter += 1
 
             bs -= j
             if bs>0:
@@ -558,6 +559,7 @@ class DynamicMemoryAge():
                     x[j] = mi.img
                     y[j] = mi.label
                     j += 1
+                    mi.traincounter += 1
 
             xs.append(x)
             ys.append(y)
@@ -579,6 +581,7 @@ class MemoryItem():
         self.filepath = filepath
         self.scanner = scanner
         self.counter = 0
+        self.traincounter = 0
         self.deleteflag = False
         self.pseudo_domain = pseudo_domain
         self.current_grammatrix = current_grammatrix
