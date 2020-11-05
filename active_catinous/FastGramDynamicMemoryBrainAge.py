@@ -241,7 +241,7 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
 
                 for i, img in enumerate(x):
                     grammatrix = [bg[i].detach().cpu().numpy().flatten() for bg in self.grammatrices]
-                    new_mi = MemoryItem(img, y[i], filepath[i], scanner[i], grammatrix[0])
+                    new_mi = MemoryItem(img.detach().cpu(), y[i], filepath[i], scanner[i], grammatrix[0])
                     self.budget = self.trainingsmemory.insert_element(new_mi, self.budget)
 
                 self.budget = self.trainingsmemory.check_outlier_memory(self.budget)
@@ -300,7 +300,7 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
 
             for i, img in enumerate(x):
                 grammatrix = [bg[i].detach().cpu().numpy().flatten() for bg in self.grammatrices]
-                new_mi = MemoryItem(img, y[i], filepath[i], scanner[i], grammatrix[0])
+                new_mi = MemoryItem(img.detach().cpu(), y[i], filepath[i], scanner[i], grammatrix[0])
                 self.trainingsmemory.insert_element(new_mi)
 
 
