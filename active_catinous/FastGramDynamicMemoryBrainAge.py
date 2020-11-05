@@ -160,7 +160,7 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
             torch.cuda.empty_cache()
 
 
-            x, y, scanner, filepath = batch
+            x, y, filepath, scanner = batch
             x = x.to(self.device)
             y_style = self.stylemodel(x.float())
 
@@ -322,7 +322,6 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
 
                 self.train_counter += 1
                 self.log('train_loss', loss)
-
                 return loss
             else:
                 return None
@@ -642,7 +641,6 @@ class NaiveDynamicMemoryAge():
         self.insert_counter += 1
 
         if self.insert_counter%self.insert_rate==0:
-            print(self.insert_counter, self.insert_rate, 'insert')
             if len(self.memorylist)<self.memorymaximum:
                 self.memorylist.append(item)
                 self.forceitems.append(item)
@@ -715,7 +713,7 @@ class MemoryItem():
         self.current_grammatrix = current_grammatrix
 
 
-def trained_model(hparams):
+def trained_model(hparams, train=True):
     if torch.cuda.is_available():
         device = torch.device('cuda')
     else:
@@ -724,7 +722,7 @@ def trained_model(hparams):
     exp_name = utils.get_expname(model.hparams)
     weights_path = utils.TRAINED_MODELS_FOLDER + exp_name +'.pt'
     print(weights_path)
-    if not os.path.exists(utils.TRAINED_MODELS_FOLDER + exp_name + '.pt'):
+    if not os.path.exists(utils.TRAINED_MODELS_FOLDER + exp_name + '.pt') and train:
         logger = pllogging.TestTubeLogger(utils.LOGGING_FOLDER, name=exp_name)
         trainer = Trainer(gpus=1, max_epochs=1, logger=logger,
                           val_check_interval=model.hparams.val_check_interval,
@@ -737,7 +735,7 @@ def trained_model(hparams):
         torch.save(model.state_dict(), weights_path)
         if model.hparams.continuous and model.hparams.use_memory:
             utils.save_memory_to_csv(model.trainingsmemory.memorylist, utils.TRAINED_MEMORY_FOLDER + exp_name + '.csv')
-    else:
+    elif os.path.exists(utils.TRAINED_MODELS_FOLDER + exp_name + '.pt'):
         print('Read: ' + weights_path)
         model.load_state_dict(torch.load(weights_path, map_location=torch.device('cpu')))
         model.freeze()
@@ -751,8 +749,12 @@ def trained_model(hparams):
         df_memory=None
 
     # always get the last version
-    max_version = max([int(x.split('_')[1]) for x in os.listdir(utils.LOGGING_FOLDER + exp_name)])
-    logs = pd.read_csv(utils.LOGGING_FOLDER + exp_name + '/version_{}/metrics.csv'.format(max_version))
+    try:
+        max_version = max([int(x.split('_')[1]) for x in os.listdir(utils.LOGGING_FOLDER + exp_name)])
+        logs = pd.read_csv(utils.LOGGING_FOLDER + exp_name + '/version_{}/metrics.csv'.format(max_version))
+    except Exception as e:
+        print(e)
+        logs = None
 
     return model, logs, df_memory, exp_name +'.pt'
 
