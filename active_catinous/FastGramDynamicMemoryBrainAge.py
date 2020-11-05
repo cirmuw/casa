@@ -39,9 +39,13 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
 
         self.learning_rate = self.hparams.learning_rate
         self.train_counter = 0
+        self.labeling_counter = 0
 
         self.budget = self.hparams.startbudget
-        self.budgetrate = 1/self.hparams.allowedlabelratio
+        if self.hparams.allowedlabelratio==0:
+            self.budgetrate = 0
+        else:
+            self.budgetrate = 1/self.hparams.allowedlabelratio
 
         self.to(device)
         print('init')
@@ -90,7 +94,7 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
         self.shiftcheckpoint_1 = False
         self.shiftcheckpoint_2 = False
 
-        if self.hparams.continuous:
+        if self.hparams.continuous and self.hparams.use_memory:
 
             initmemoryelements = self.getmemoryitems_from_base(num_items=self.hparams.memorymaximum)
 
@@ -426,6 +430,7 @@ class DynamicMemoryAge():
                                 self.domaincounter[new_domain_label] += 1
                                 to_delete.append(self.outlier_memory[k])
                                 budget -= 1.0
+                                self.labeling_counter += 1
                     else:
                         print('run out of budget ', budget)
                 for elem in to_delete:
@@ -489,6 +494,7 @@ class DynamicMemoryAge():
                 else:
                     self.domaincounter[domain] += 1
                 self.memorylist[idx] = item
+                self.labeling_counter += 1
 
                 # add tree to clf of domain
                 clf = self.isoforests[domain]
@@ -604,6 +610,7 @@ def trained_model(hparams):
                           checkpoint_callback=False)
         trainer.fit(model)
         print('train counter', model.train_counter)
+        print('label counter', model.labeling_counter)
         model.freeze()
         torch.save(model.state_dict(), weights_path)
         if model.hparams.continuous and model.hparams.use_memory:
@@ -618,6 +625,8 @@ def trained_model(hparams):
             df_memory = pd.read_csv(utils.TRAINED_MEMORY_FOLDER + exp_name + '.csv')
         else:
             df_memory = None
+    else:
+        df_memory=None
 
     # always get the last version
     max_version = max([int(x.split('_')[1]) for x in os.listdir(utils.LOGGING_FOLDER + exp_name)])
