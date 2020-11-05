@@ -45,12 +45,16 @@ def get_expname(hparams, task=None):
         expname = task
         expname += '_cont' if hparams['continuous'] else '_batch'
 
+    if 'naive_continuous' in hparams:
+        expname += '_naive'
+
+
     expname += '_' + os.path.splitext(os.path.basename(hparams['datasetfile']))[0]
     if hparams['base_model']:
         expname += '_basemodel_' + hparams['base_model'].split('_')[1]
     if hparams['continuous']:
         expname += '_fmiss' if hparams['force_misclassified'] else ''
-        expname += '_cache' if hparams['use_cache'] else '_nocache'
+        expname += '_memory' if hparams['use_memory'] else '_nomemory'
         expname += '_tf{}'.format(str(hparams['transition_phase_after']).replace('.', ''))
     else:
         expname += '_' + '-'.join(hparams['noncontinuous_train_splits'])

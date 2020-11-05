@@ -37,9 +37,13 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
         self.hparams = utils.default_params(self.get_default_hparams(), hparams)
         self.hparams = argparse.Namespace(**self.hparams)
 
+        if 'naive_continuous' in self.hparams:
+            self.naive_continuous = True
+        else:
+            self.naive_continuous = False
+
         self.learning_rate = self.hparams.learning_rate
         self.train_counter = 0
-        self.labeling_counter = 0
 
         self.budget = self.hparams.startbudget
         if self.hparams.allowedlabelratio==0:
@@ -98,13 +102,19 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
 
             initmemoryelements = self.getmemoryitems_from_base(num_items=self.hparams.memorymaximum)
 
-            #PREFILL memory with base training samples!!!!
-            self.trainingsmemory = DynamicMemoryAge(initelements=initmemoryelements,
-                                                    memorymaximum=self.hparams.memorymaximum,
-                                                   gram_weights=self.hparams.gram_weights,
-                                                    seed=self.hparams.seed)
+            if self.naive_continuous:
+                self.trainingsmemory = NaiveDynamicMemoryAge(initelements=initmemoryelements,
+                                                             insert_rate=self.hparams.naive_continuous_rate,
+                                                        memorymaximum=self.hparams.memorymaximum,
+                                                        gram_weights=self.hparams.gram_weights,
+                                                        seed=self.hparams.seed)
+            else:
+                self.trainingsmemory = DynamicMemoryAge(initelements=initmemoryelements,
+                                                        memorymaximum=self.hparams.memorymaximum,
+                                                       gram_weights=self.hparams.gram_weights,
+                                                        seed=self.hparams.seed)
 
-            print(len(self.trainingsmemory.get_domainitems(0)))
+                print(len(self.trainingsmemory.get_domainitems(0)))
 
         if verbose:
             pprint(vars(self.hparams))
@@ -220,49 +230,81 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
                 torch.save(self.model.state_dict(), weights_path)
                 self.shiftcheckpoint_2 = True
 
-        if self.hparams.use_memory:
-            torch.cuda.empty_cache()
+        if not self.naive_continuous and self.hparams.use_memory:
+                torch.cuda.empty_cache()
 
+                y = y[:, None]
+                self.grammatrices = []
+                y_style = self.stylemodel(x.float())
+
+                budget_before = self.budget
+
+                for i, img in enumerate(x):
+                    grammatrix = [bg[i].detach().cpu().numpy().flatten() for bg in self.grammatrices]
+                    new_mi = MemoryItem(img, y[i], filepath[i], scanner[i], grammatrix[0])
+                    self.budget = self.trainingsmemory.insert_element(new_mi, self.budget)
+
+                self.budget = self.trainingsmemory.check_outlier_memory(self.budget)
+                self.trainingsmemory.counter_outlier_memory()
+
+                #form trainings X domain balanced batches to train one epoch on all newly inserted samples
+                #print(self.trainingsmemory.domaincomplete.items())
+                if not np.all(list(self.trainingsmemory.domaincomplete.values())) and budget_before!=self.budget: #only train when a domain is incomplete and new samples are inserted?
+                    self.eval()
+                    for k, v in self.trainingsmemory.domaincomplete.items():
+                        if not v:
+                            domainitems = self.trainingsmemory.get_domainitems(k)
+                            if len(domainitems) >= self.trainingsmemory.max_per_domain:
+                                preds = []
+                                true = []
+                                for item in domainitems:
+                                    x = item.img
+                                    x = x[None, :].to(self.device)
+                                    true.append(item.label)
+                                    outy = self.model(x.float())
+                                    preds.append(outy.detach().cpu().numpy()[0])
+                                    # mae = self.mae(y, outy)
+                                    # error += mae.item()
+
+                                error = mean_absolute_error(true, preds)
+                                if error <= self.hparams.completion_limit:
+                                    self.trainingsmemory.domaincomplete[k] = True
+
+                    self.train()
+
+                    xs, ys = self.trainingsmemory.get_training_batch(self.hparams.batch_size, batches=2)
+
+                    loss = None
+                    for i, x in enumerate(xs):
+                        y = ys[i]
+
+                        x = x.to(self.device)
+                        y = y.to(self.device)
+
+                        y_hat = self.model(x.float())
+                        if loss is None:
+                            loss = self.loss(y_hat, y.float())
+                        else:
+                            loss += self.loss(y_hat, y.float())
+
+                    self.train_counter += 1
+                    self.log('train_loss', loss)
+
+                    return loss
+                else:
+                    return None
+        elif self.naive_continuous and self.hparams.use_memory:
             y = y[:, None]
             self.grammatrices = []
             y_style = self.stylemodel(x.float())
 
-            budget_before = self.budget
-
             for i, img in enumerate(x):
                 grammatrix = [bg[i].detach().cpu().numpy().flatten() for bg in self.grammatrices]
-
                 new_mi = MemoryItem(img, y[i], filepath[i], scanner[i], grammatrix[0])
-                self.budget = self.trainingsmemory.insert_element(new_mi, self.budget)
+                self.trainingsmemory.insert_element(new_mi)
 
-            self.budget = self.trainingsmemory.check_outlier_memory(self.budget)
-            self.trainingsmemory.counter_outlier_memory()
 
-            #form trainings X domain balanced batches to train one epoch on all newly inserted samples
-            #print(self.trainingsmemory.domaincomplete.items())
-            if not np.all(list(self.trainingsmemory.domaincomplete.values())) and budget_before!=self.budget: #only train when a domain is incomplete and new samples are inserted?
-                self.eval()
-                for k, v in self.trainingsmemory.domaincomplete.items():
-                    if not v:
-                        domainitems = self.trainingsmemory.get_domainitems(k)
-                        if len(domainitems) >= self.trainingsmemory.max_per_domain:
-                            preds = []
-                            true = []
-                            for item in domainitems:
-                                x = item.img
-                                x = x[None, :].to(self.device)
-                                true.append(item.label)
-                                outy = self.model(x.float())
-                                preds.append(outy.detach().cpu().numpy()[0])
-                                # mae = self.mae(y, outy)
-                                # error += mae.item()
-
-                            error = mean_absolute_error(true, preds)
-                            if error <= self.hparams.completion_limit:
-                                self.trainingsmemory.domaincomplete[k] = True
-
-                self.train()
-
+            if len(self.trainingsmemory.forceitems)!=0:
                 xs, ys = self.trainingsmemory.get_training_batch(self.hparams.batch_size, batches=2)
 
                 loss = None
@@ -289,8 +331,6 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
             loss = self.loss(y_hat, y[:, None].float())
             self.log('train_loss', loss)
             return loss
-
-
 
     def validation_step(self, batch, batch_idx):
         x, y, img, res = batch
@@ -364,7 +404,7 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
 
 class DynamicMemoryAge():
 
-    def __init__(self, initelements, memorymaximum=256, gram_weights=None, seed=None):
+    def __init__(self, initelements, memorymaximum=256, gram_weights=None, seed=None, transformgrams=True):
         self.memoryfull = False
         self.memorylist = initelements
         self.memorymaximum = memorymaximum
@@ -373,18 +413,22 @@ class DynamicMemoryAge():
         self.domaincounter = {0: len(self.memorylist)} #0 is the base training domain
         self.max_per_domain = memorymaximum
         self.seed = seed
+        self.labeling_counter = 0
 
         graminits = []
         for mi in initelements:
             graminits.append(mi.current_grammatrix)
 
-        self.transformer = SparseRandomProjection(random_state=seed, n_components=30)
-        self.transformer.fit(graminits)
+        if transformgrams:
+            self.transformer = SparseRandomProjection(random_state=seed, n_components=30)
+            self.transformer.fit(graminits)
+            for mi in initelements:
+                mi.current_grammatrix = self.transformer.transform(mi.current_grammatrix.reshape(1, -1))
+            trans_initelements = self.transformer.transform(graminits)
+        else:
+            self.transformer = None
+            trans_initelements = graminits
 
-        for mi in initelements:
-            mi.current_grammatrix = self.transformer.transform(mi.current_grammatrix.reshape(1, -1))
-
-        trans_initelements = self.transformer.transform(graminits)
         clf = IsolationForest(n_estimators=10, random_state=seed).fit(trans_initelements)
         self.isoforests = {0: clf}
 
@@ -579,6 +623,84 @@ class DynamicMemoryAge():
                 items.append(mi)
         return items
 
+class NaiveDynamicMemoryAge():
+
+    def __init__(self, initelements, memorymaximum=256, insert_rate=10, gram_weights=None, seed=None):
+        self.memoryfull = False
+        self.memorylist = initelements
+        self.memorymaximum = memorymaximum
+        self.gram_weigths = gram_weights
+        self.seed = seed
+        self.insert_counter = 0
+        self.insert_rate = insert_rate
+        self.forceitems = []
+        self.labeling_counter = 0
+        self.img_size = (64, 128, 128)
+
+
+    def insert_element(self, item):
+        self.insert_counter += 1
+
+        if self.insert_counter%self.insert_rate==0:
+            print(self.insert_counter, self.insert_rate, 'insert')
+            if len(self.memorylist)<self.memorymaximum:
+                self.memorylist.append(item)
+                self.forceitems.append(item)
+                self.labeling_counter += 1
+            else:
+                assert (item.current_grammatrix is not None)
+                insertidx = -1
+                mingramloss = 1000
+                for j, mi in enumerate(self.memorylist):
+                    loss = F.mse_loss(torch.tensor(item.current_grammatrix), torch.tensor(mi.current_grammatrix),
+                                      reduction='mean')
+
+                    if loss < mingramloss:
+                        mingramloss = loss
+                        insertidx = j
+                self.memorylist[insertidx] = item
+                self.forceitems.append(item)
+                self.labeling_counter += 1
+
+    def get_training_batch(self, batchsize, batches=1):
+        xs = []
+        ys = []
+
+        half_batch = int(batchsize / 2)
+
+        for b in range(batches):
+            j = 0
+            bs = batchsize
+            x = torch.empty(size=(batchsize, 1, self.img_size[0], self.img_size[1], self.img_size[2]))
+            y = torch.empty(size=(batchsize, 1))
+
+            if len(self.forceitems)>0:
+                random.shuffle(self.forceitems)
+                m = min(len(self.forceitems), half_batch)
+                for mi in self.forceitems[-m:]:
+                    if j<bs:
+                        x[j] = mi.img
+                        y[j] = mi.label
+                        j += 1
+                        mi.traincounter += 1
+
+            bs -= j
+            if bs>0:
+                random.shuffle(self.memorylist)
+                for mi in self.memorylist[-bs:]:
+                    x[j] = mi.img
+                    y[j] = mi.label
+                    j += 1
+                    mi.traincounter += 1
+
+            xs.append(x)
+            ys.append(y)
+
+        self.forceitems = []
+
+        return (xs, ys)
+
+
 class MemoryItem():
 
     def __init__(self, img, label, filepath, scanner, current_grammatrix=None, pseudo_domain=None):
@@ -610,7 +732,7 @@ def trained_model(hparams):
                           checkpoint_callback=False)
         trainer.fit(model)
         print('train counter', model.train_counter)
-        print('label counter', model.labeling_counter)
+        print('label counter', model.trainingsmemory.labeling_counter)
         model.freeze()
         torch.save(model.state_dict(), weights_path)
         if model.hparams.continuous and model.hparams.use_memory:
