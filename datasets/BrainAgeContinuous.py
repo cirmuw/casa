@@ -7,18 +7,18 @@ from active_catinous.utils import *
 
 class BrainAgeContinuous(Dataset):
 
-    def __init__(self, datasetfile, transition_phase_after=.8, order=['1.5T Philips', '3.0T Philips', '3.0T']):
+    def __init__(self, datasetfile, transition_phase_after=.8, order=['1.5T Philips', '3.0T Philips', '3.0T'], seed=None):
 
         df = pd.read_csv(datasetfile, index_col=0)
         assert (set(['train']).issubset(df.split.unique()))
 
-        np.random.seed(15613056)
+        np.random.seed(seed)
 
         res_dfs = list()
         for r in order:
             res_df = df.loc[df.Scanner == r]
             res_df = res_df.loc[res_df.split == 'train']
-            res_df = res_df.sample(frac=1)
+            res_df = res_df.sample(frac=1, random_state=seed)
 
             res_dfs.append(res_df.reset_index(drop=True))
 

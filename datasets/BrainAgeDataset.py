@@ -7,7 +7,7 @@ from active_catinous.utils import *
 
 class BrainAgeDataset(Dataset):
 
-    def __init__(self, datasetfile, split=['base_train'], iterations=None, batch_size=None, res=None):
+    def __init__(self, datasetfile, split=['base_train'], iterations=None, batch_size=None, res=None, seed=None):
 
         df = pd.read_csv(datasetfile, index_col=0)
         if type(split) is list:
@@ -23,7 +23,7 @@ class BrainAgeDataset(Dataset):
             #self.df = self.df.reset_index()
 
         if iterations is not None:
-            self.df = self.df.sample(iterations*batch_size, replace=True)
+            self.df = self.df.sample(iterations*batch_size, replace=True, random_state=seed)
             self.df = self.df.reset_index(drop=True)
 
 

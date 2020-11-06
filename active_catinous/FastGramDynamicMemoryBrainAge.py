@@ -272,7 +272,8 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
 
                     self.train()
 
-                    xs, ys = self.trainingsmemory.get_training_batch(self.hparams.batch_size, batches=2)
+                    xs, ys = self.trainingsmemory.get_training_batch(self.hparams.batch_size,
+                                                                     batches=int(self.hparams.training_batch_size/self.hparams.batch_size))
 
                     loss = None
                     for i, x in enumerate(xs):
@@ -305,7 +306,8 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
 
 
             if len(self.trainingsmemory.forceitems)!=0:
-                xs, ys = self.trainingsmemory.get_training_batch(self.hparams.batch_size, batches=2)
+                xs, ys = self.trainingsmemory.get_training_batch(self.hparams.batch_size,
+                                                                 batches=int(self.hparams.training_batch_size/self.hparams.batch_size))
 
                 loss = None
                 for i, x in enumerate(xs):
@@ -385,14 +387,14 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
         if self.hparams.continuous:
             return DataLoader(BrainAgeContinuous(self.hparams.datasetfile,
                                                                transition_phase_after=self.hparams.transition_phase_after),
-                              batch_size=self.hparams.batch_size, num_workers=4, drop_last=True, pin_memory=False)
+                              batch_size=self.hparams.batch_size, num_workers=4, drop_last=True, pin_memory=False, seed=self.hparams.seed)
         else:
             return DataLoader(BrainAgeDataset(self.hparams.datasetfile,
                                               iterations=self.hparams.noncontinuous_steps,
                                               batch_size=self.hparams.batch_size,
                                               split=self.hparams.noncontinuous_train_splits,
                                               res=self.hparams.scanner),
-                              batch_size=self.hparams.batch_size, num_workers=4, pin_memory=False)
+                              batch_size=self.hparams.batch_size, num_workers=4, pin_memory=False, seed=self.hparams.seed)
 
     #@pl.data_loader
     def val_dataloader(self):
@@ -759,12 +761,14 @@ def trained_model(hparams, train=True):
     return model, logs, df_memory, exp_name +'.pt'
 
 def is_cached(hparams):
-    model = FastGramDynamicMemoryBrainAge(hparams=hparams)
-    exp_name = utils.get_expname(model.hparams)
+    #model = FastGramDynamicMemoryBrainAge(hparams=hparams)
+    hparams = utils.default_params(FastGramDynamicMemoryBrainAge.get_default_hparams(), hparams)
+    exp_name = utils.get_expname(hparams)
     return os.path.exists(utils.TRAINED_MODELS_FOLDER + exp_name + '.pt')
 
 
 def cached_path(hparams):
-    model = FastGramDynamicMemoryBrainAge(hparams=hparams)
-    exp_name = utils.get_expname(model.hparams)
+    #model = FastGramDynamicMemoryBrainAge(hparams=hparams)
+    hparams = utils.default_params(FastGramDynamicMemoryBrainAge.get_default_hparams(), hparams)
+    exp_name = utils.get_expname(hparams)
     return utils.TRAINED_MODELS_FOLDER + exp_name + '.pt'
