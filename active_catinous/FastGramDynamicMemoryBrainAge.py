@@ -32,7 +32,7 @@ from . import utils
 
 class FastGramDynamicMemoryBrainAge(pl.LightningModule):
 
-    def __init__(self, hparams={}, device=torch.device('cpu'), verbose=False):
+    def __init__(self, hparams={}, device=torch.device('cpu'), verbose=True):
         super(FastGramDynamicMemoryBrainAge, self).__init__()
         self.hparams = utils.default_params(self.get_default_hparams(), hparams)
         self.hparams = argparse.Namespace(**self.hparams)
