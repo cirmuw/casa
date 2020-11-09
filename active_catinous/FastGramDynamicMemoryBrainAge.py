@@ -29,6 +29,7 @@ from sklearn.metrics import mean_absolute_error
 from scipy.spatial.distance import pdist, squareform
 
 from . import utils
+import collections
 
 class FastGramDynamicMemoryBrainAge(pl.LightningModule):
 
@@ -242,35 +243,20 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
                 for i, img in enumerate(x):
                     grammatrix = [bg[i].detach().cpu().numpy().flatten() for bg in self.grammatrices]
                     new_mi = MemoryItem(img.detach().cpu(), y[i], filepath[i], scanner[i], grammatrix[0])
-                    self.budget = self.trainingsmemory.insert_element(new_mi, self.budget)
+                    self.budget = self.trainingsmemory.insert_element(new_mi, self.budget, self)
 
-                self.budget = self.trainingsmemory.check_outlier_memory(self.budget)
+                self.budget = self.trainingsmemory.check_outlier_memory(self.budget, self)
                 self.trainingsmemory.counter_outlier_memory()
 
                 #form trainings X domain balanced batches to train one epoch on all newly inserted samples
                 #print(self.trainingsmemory.domaincomplete.items())
                 if not np.all(list(self.trainingsmemory.domaincomplete.values())) and budget_before!=self.budget: #only train when a domain is incomplete and new samples are inserted?
-                    self.eval()
                     for k, v in self.trainingsmemory.domaincomplete.items():
                         if not v:
-                            domainitems = self.trainingsmemory.get_domainitems(k)
-                            if len(domainitems) >= self.trainingsmemory.max_per_domain:
-                                preds = []
-                                true = []
-                                for item in domainitems:
-                                    x = item.img
-                                    x = x[None, :].to(self.device)
-                                    true.append(item.label)
-                                    outy = self.model(x.float())
-                                    preds.append(outy.detach().cpu().numpy()[0])
-                                    # mae = self.mae(y, outy)
-                                    # error += mae.item()
-
-                                error = mean_absolute_error(true, preds)
-                                if error <= self.hparams.completion_limit:
+                            if len(self.trainingsmemory.domainMAE[k])==5:
+                                mae = np.mean(self.trainingsmemory.domainMAE[k])
+                                if mae<self.hparams.completion_limit:
                                     self.trainingsmemory.domaincomplete[k] = True
-
-                    self.train()
 
                     xs, ys = self.trainingsmemory.get_training_batch(self.hparams.batch_size,
                                                                      batches=int(self.hparams.training_batch_size/self.hparams.batch_size))
@@ -381,20 +367,32 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
         return torch.optim.Adam(self.parameters(), lr=self.learning_rate)
 
 
+    def get_absolute_error(self, image, label):
+        self.eval()
+        x = image
+        x = x[None, :].to(self.device)
+        outy = self.model(x.float())
+        error = abs(outy.detach().cpu().numpy()[0]-label.numpy())
+        self.train()
+        return error
+
 
     #@pl.data_loader
     def train_dataloader(self):
         if self.hparams.continuous:
             return DataLoader(BrainAgeContinuous(self.hparams.datasetfile,
-                                                               transition_phase_after=self.hparams.transition_phase_after),
-                              batch_size=self.hparams.batch_size, num_workers=4, drop_last=True, pin_memory=False, seed=self.hparams.seed)
+                                                               transition_phase_after=self.hparams.transition_phase_after,
+                                                                seed=self.hparams.seed),
+                              batch_size=self.hparams.batch_size, num_workers=4, drop_last=True, pin_memory=False)
         else:
             return DataLoader(BrainAgeDataset(self.hparams.datasetfile,
                                               iterations=self.hparams.noncontinuous_steps,
                                               batch_size=self.hparams.batch_size,
                                               split=self.hparams.noncontinuous_train_splits,
-                                              res=self.hparams.scanner),
-                              batch_size=self.hparams.batch_size, num_workers=4, pin_memory=False, seed=self.hparams.seed)
+                                              res=self.hparams.scanner,
+                                              seed=self.hparams.seed
+                                              ),
+                              batch_size=self.hparams.batch_size, num_workers=4, pin_memory=False)
 
     #@pl.data_loader
     def val_dataloader(self):
@@ -435,23 +433,19 @@ class DynamicMemoryAge():
 
         self.domaincomplete = {0: True}
 
+        self.domainMAE = {0: collections.deque(maxlen=5)} #TODO: this is an arbritary threshold
+
         self.outlier_memory = []
-        self.outlier_epochs = 25
+        self.outlier_epochs = 25 #TODO: this is an arbritary threshold
 
         self.img_size = (64, 128, 128)
 
-    def check_outlier_memory(self, budget):
-        if len(self.outlier_memory)>10 and int(budget)>=5:
+    def check_outlier_memory(self, budget, model):
+        if len(self.outlier_memory)>5 and int(budget)>=5:
             outlier_grams = [o.current_grammatrix for o in self.outlier_memory]
-            # TODO: have to do a pre selection of cache elements here based on, shouldnt add a new pseudodomain if memory is to far spread
-            # Add up all pairwise distances if median distance smaller than threshold insert new domain.
 
-            distances = squareform(pdist(outlier_grams)) #distances to see the compactness of memory
-            #print(sorted([np.array(sorted(d)[:6]).sum() for d in distances]),
-            #      sorted([np.array(sorted(d)[:6]).sum() for d in distances])[5])
-
-
-            if sorted([np.array(sorted(d)[:6]).sum() for d in distances])[5]<0.15:
+            distances = squareform(pdist(outlier_grams))
+            if sorted([np.array(sorted(d)[:6]).sum() for d in distances])[5]<0.15: #TODO: this is an arbritary threshold
 
                 clf = IsolationForest(n_estimators=5, random_state=self.seed, warm_start=True, contamination=0.10).fit(
                     outlier_grams)
@@ -459,6 +453,7 @@ class DynamicMemoryAge():
                 new_domain_label = len(self.isoforests)
                 self.domaincomplete[new_domain_label] = False
                 self.domaincounter[new_domain_label] = 0
+                self.domainMAE[new_domain_label] = collections.deque(maxlen=5)
                 self.max_per_domain = int(self.memorymaximum/(new_domain_label+1))
 
                 self.flag_items_for_deletion()
@@ -476,6 +471,7 @@ class DynamicMemoryAge():
                                 to_delete.append(self.outlier_memory[k])
                                 budget -= 1.0
                                 self.labeling_counter += 1
+                                self.domainMAE[new_domain_label].append(model.get_absolute_error(elem.img, elem.label))
                     else:
                         print('run out of budget ', budget)
                 for elem in to_delete:
@@ -511,7 +507,7 @@ class DynamicMemoryAge():
             if item.counter>self.outlier_epochs:
                 self.outlier_memory.remove(item)
 
-    def insert_element(self, item, budget):
+    def insert_element(self, item, budget, model):
         if self.transformer is not None:
             item.current_grammatrix = self.transformer.transform(item.current_grammatrix.reshape(1, -1))
             item.current_grammatrix = item.current_grammatrix[0]
@@ -540,6 +536,7 @@ class DynamicMemoryAge():
                     self.domaincounter[domain] += 1
                 self.memorylist[idx] = item
                 self.labeling_counter += 1
+                self.domainMAE[domain].append(model.get_absolute_error(item.img, item.label))
 
                 # add tree to clf of domain
                 clf = self.isoforests[domain]
