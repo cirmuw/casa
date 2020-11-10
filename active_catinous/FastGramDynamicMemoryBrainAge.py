@@ -113,7 +113,8 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
                 self.trainingsmemory = DynamicMemoryAge(initelements=initmemoryelements,
                                                         memorymaximum=self.hparams.memorymaximum,
                                                        gram_weights=self.hparams.gram_weights,
-                                                        seed=self.hparams.seed)
+                                                        seed=self.hparams.seed,
+                                                        perf_queue_len=self.hparams.len_perf_queue)
 
                 print(len(self.trainingsmemory.get_domainitems(0)))
 
@@ -146,6 +147,7 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
         hparams['allowedlabelratio'] = 10
         hparams['scanner'] = None
         hparams['startbudget'] = 0.0
+        hparams['len_perf_queue'] = 5
 
         return hparams
 
@@ -250,10 +252,10 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
 
                 #form trainings X domain balanced batches to train one epoch on all newly inserted samples
                 #print(self.trainingsmemory.domaincomplete.items())
-                if not np.all(list(self.trainingsmemory.domaincomplete.values())) and budget_before!=self.budget: #only train when a domain is incomplete and new samples are inserted?
+                if not np.all(list(self.trainingsmemory.domaincomplete.values())): #and budget_before!=self.budget: #only train when a domain is incomplete and new samples are inserted?
                     for k, v in self.trainingsmemory.domaincomplete.items():
                         if not v:
-                            if len(self.trainingsmemory.domainMAE[k])==5:
+                            if len(self.trainingsmemory.domainMAE[k])==self.hparams.len_perf_queue:
                                 mae = np.mean(self.trainingsmemory.domainMAE[k])
                                 if mae<self.hparams.completion_limit:
                                     self.trainingsmemory.domaincomplete[k] = True
@@ -403,7 +405,7 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
 
 class DynamicMemoryAge():
 
-    def __init__(self, initelements, memorymaximum=256, gram_weights=None, seed=None, transformgrams=True):
+    def __init__(self, initelements, memorymaximum=256, gram_weights=None, seed=None, transformgrams=True, perf_queue_len=5):
         self.memoryfull = False
         self.memorylist = initelements
         self.memorymaximum = memorymaximum
@@ -433,8 +435,8 @@ class DynamicMemoryAge():
 
         self.domaincomplete = {0: True}
 
-        self.domainMAE = {0: collections.deque(maxlen=5)} #TODO: this is an arbritary threshold
-
+        self.domainMAE = {0: collections.deque(maxlen=perf_queue_len)} #TODO: this is an arbritary threshold
+        self.perf_queue_len = perf_queue_len
         self.outlier_memory = []
         self.outlier_epochs = 25 #TODO: this is an arbritary threshold
 
@@ -453,7 +455,7 @@ class DynamicMemoryAge():
                 new_domain_label = len(self.isoforests)
                 self.domaincomplete[new_domain_label] = False
                 self.domaincounter[new_domain_label] = 0
-                self.domainMAE[new_domain_label] = collections.deque(maxlen=5)
+                self.domainMAE[new_domain_label] = collections.deque(maxlen=self.perf_queue_len)
                 self.max_per_domain = int(self.memorymaximum/(new_domain_label+1))
 
                 self.flag_items_for_deletion()

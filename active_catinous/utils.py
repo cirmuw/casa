@@ -37,6 +37,9 @@ def get_expname(hparams, task=None):
     elif type(hparams) is AttributeDict:
         hparams = dict(hparams)
 
+    if hparams['len_perf_queue'] == 5: ##HACKY hack
+        hparams.pop('len_perf_queue')
+
     hashed_params = hash(hparams, length=10)
 
     if task is None:
