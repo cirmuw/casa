@@ -47,6 +47,7 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
         self.train_counter = 0
 
         self.budget = self.hparams.startbudget
+        self.budgetchangecounter = 0
         if self.hparams.allowedlabelratio==0:
             self.budgetrate = 0
         else:
@@ -250,13 +251,22 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
                 self.budget = self.trainingsmemory.check_outlier_memory(self.budget, self)
                 self.trainingsmemory.counter_outlier_memory()
 
+                if budget_before==self.budget:
+                    self.budgetchangecounter+=1
+                else:
+                    self.budgetchangecounter=1
+
+                print(budget_before, self.budget, self.trainingsmemory.domaincomplete, self.budgetchangecounter)
+
                 #form trainings X domain balanced batches to train one epoch on all newly inserted samples
                 #print(self.trainingsmemory.domaincomplete.items())
-                if not np.all(list(self.trainingsmemory.domaincomplete.values())): #and budget_before!=self.budget: #only train when a domain is incomplete and new samples are inserted?
+                if not np.all(list(self.trainingsmemory.domaincomplete.values())) and self.budgetchangecounter<10: #only train when a domain is incomplete and new samples are inserted?
                     for k, v in self.trainingsmemory.domaincomplete.items():
                         if not v:
                             if len(self.trainingsmemory.domainMAE[k])==self.hparams.len_perf_queue:
                                 mae = np.mean(self.trainingsmemory.domainMAE[k])
+                                print(mae, self.trainingsmemory.domainMAE[k])
+
                                 if mae<self.hparams.completion_limit:
                                     self.trainingsmemory.domaincomplete[k] = True
 
@@ -276,6 +286,7 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
                         else:
                             loss += self.loss(y_hat, y.float())
 
+                    print(len(xs), loss)
                     self.train_counter += 1
                     self.log('train_loss', loss)
 

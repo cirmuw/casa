@@ -30,7 +30,6 @@ class BrainAgeContinuous(Dataset):
             new = res_dfs[j + 1]
 
             old_end = int((len(old) - new_idx) * transition_phase_after) + new_idx
-            print(old_end)
             if combds is None:
                 combds = old.iloc[:old_end]
             else:
