@@ -220,19 +220,16 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
         self.budget += len(filepath) * self.budgetrate
 
         #TODO: insert checkpoints for BWT/FWT calculation here
-
-        if ('1.5T Philips' in scanner) and ('3.0T Philips' in scanner):  # this is not the most elegant thing to do
-            if not self.shiftcheckpoint_1:
-                exp_name = utils.get_expname(self.hparams)
-                weights_path = utils.TRAINED_MODELS_FOLDER + exp_name + '_shift_1_ckpt.pt'
-                torch.save(self.model.state_dict(), weights_path)
-                self.shiftcheckpoint_1 = True
-        elif ('3.0T Philips' in scanner) and ('3.0T' in scanner):
-            if not self.shiftcheckpoint_2:
-                exp_name = utils.get_expname(self.hparams)
-                weights_path = utils.TRAINED_MODELS_FOLDER + exp_name + '_shift_2_ckpt.pt'
-                torch.save(self.model.state_dict(), weights_path)
-                self.shiftcheckpoint_2 = True
+        if '3.0T Philips' in scanner and not self.shiftcheckpoint_1:
+            exp_name = utils.get_expname(self.hparams)
+            weights_path = utils.TRAINED_MODELS_FOLDER + exp_name + '_shift_1_ckpt.pt'
+            torch.save(self.model.state_dict(), weights_path)
+            self.shiftcheckpoint_1 = True
+        if '3.0T' in scanner and not self.shiftcheckpoint_2:
+            exp_name = utils.get_expname(self.hparams)
+            weights_path = utils.TRAINED_MODELS_FOLDER + exp_name + '_shift_2_ckpt.pt'
+            torch.save(self.model.state_dict(), weights_path)
+            self.shiftcheckpoint_2 = True
 
         if not self.naive_continuous and self.hparams.use_memory:
                 torch.cuda.empty_cache()
@@ -256,8 +253,6 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
                 else:
                     self.budgetchangecounter=1
 
-                print(budget_before, self.budget, self.trainingsmemory.domaincomplete, self.budgetchangecounter)
-
                 #form trainings X domain balanced batches to train one epoch on all newly inserted samples
                 #print(self.trainingsmemory.domaincomplete.items())
                 if not np.all(list(self.trainingsmemory.domaincomplete.values())) and self.budgetchangecounter<10: #only train when a domain is incomplete and new samples are inserted?
@@ -265,7 +260,6 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
                         if not v:
                             if len(self.trainingsmemory.domainMAE[k])==self.hparams.len_perf_queue:
                                 mae = np.mean(self.trainingsmemory.domainMAE[k])
-                                print(mae, self.trainingsmemory.domainMAE[k])
 
                                 if mae<self.hparams.completion_limit:
                                     self.trainingsmemory.domaincomplete[k] = True
@@ -286,7 +280,6 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
                         else:
                             loss += self.loss(y_hat, y.float())
 
-                    print(len(xs), loss)
                     self.train_counter += 1
                     self.log('train_loss', loss)
 
@@ -458,7 +451,7 @@ class DynamicMemoryAge():
             outlier_grams = [o.current_grammatrix for o in self.outlier_memory]
 
             distances = squareform(pdist(outlier_grams))
-            if sorted([np.array(sorted(d)[:6]).sum() for d in distances])[5]<0.15: #TODO: this is an arbritary threshold
+            if sorted([np.array(sorted(d)[:6]).sum() for d in distances])[5]<0.20: #TODO: this is an arbritary threshold
 
                 clf = IsolationForest(n_estimators=5, random_state=self.seed, warm_start=True, contamination=0.10).fit(
                     outlier_grams)
@@ -491,6 +484,9 @@ class DynamicMemoryAge():
                     self.outlier_memory.remove(elem)
 
                 self.isoforests[new_domain_label] = clf
+
+                for elem in self.get_domainitems(new_domain_label):
+                    print('found new domain', new_domain_label, elem.scanner)
 
         return budget
 
@@ -545,6 +541,7 @@ class DynamicMemoryAge():
                             if loss < mingramloss:
                                 mingramloss = loss
                                 idx = j
+                    print(self.memorylist[idx].scanner, 'replaced by', item.scanner, 'in domain', domain)
                 else:
                     self.domaincounter[domain] += 1
                 self.memorylist[idx] = item
