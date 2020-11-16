@@ -33,7 +33,7 @@ import collections
 
 class FastGramDynamicMemoryBrainAge(pl.LightningModule):
 
-    def __init__(self, hparams={}, device=torch.device('cpu'), verbose=True):
+    def __init__(self, hparams={}, device=torch.device('cpu'), verbose=True, for_training=True):
         super(FastGramDynamicMemoryBrainAge, self).__init__()
         self.hparams = utils.default_params(self.get_default_hparams(), hparams)
         self.hparams = argparse.Namespace(**self.hparams)
@@ -56,34 +56,6 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
         self.to(device)
         print('init')
 
-        self.stylemodel = EncoderModelGenesis()
-
-        # Load pretrained model genesis
-        weight_dir = 'models/Genesis_Chest_CT.pt'
-        checkpoint = torch.load(weight_dir)
-        state_dict = checkpoint['state_dict']
-        unParalled_state_dict = {}
-        for key in state_dict.keys():
-            if key.startswith('module.down_'):
-                unParalled_state_dict[key.replace("module.", "")] = state_dict[key]
-        self.stylemodel.load_state_dict(unParalled_state_dict)
-
-        if self.hparams.use_memory and self.hparams.continuous:
-            self.init_cache_and_gramhooks()
-        else:
-            if verbose:
-                logging.info('No continous learning, following parameters are invalidated: \n'
-                             'transition_phase_after \n'
-                             'cachemaximum \n'
-                             'use_cache \n'
-                             'random_cache \n'
-                             'force_misclassified \n'
-                             'direction')
-            self.hparams.use_memory = False
-
-        self.stylemodel.to(device)
-        self.stylemodel.eval()
-
         self.model = EncoderRegressor()
         self.model.to(device)
         if not self.hparams.base_model is None:
@@ -100,24 +72,53 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
         self.shiftcheckpoint_1 = False
         self.shiftcheckpoint_2 = False
 
-        if self.hparams.continuous and self.hparams.use_memory:
+        if for_training:
+            self.stylemodel = EncoderModelGenesis()
 
-            initmemoryelements = self.getmemoryitems_from_base(num_items=self.hparams.memorymaximum)
+            # Load pretrained model genesis
+            weight_dir = 'models/Genesis_Chest_CT.pt'
+            checkpoint = torch.load(weight_dir)
+            state_dict = checkpoint['state_dict']
+            unParalled_state_dict = {}
+            for key in state_dict.keys():
+                if key.startswith('module.down_'):
+                    unParalled_state_dict[key.replace("module.", "")] = state_dict[key]
+            self.stylemodel.load_state_dict(unParalled_state_dict)
 
-            if self.naive_continuous:
-                self.trainingsmemory = NaiveDynamicMemoryAge(initelements=initmemoryelements,
-                                                             insert_rate=self.hparams.naive_continuous_rate,
-                                                        memorymaximum=self.hparams.memorymaximum,
-                                                        gram_weights=self.hparams.gram_weights,
-                                                        seed=self.hparams.seed)
+            if self.hparams.use_memory and self.hparams.continuous:
+                self.init_cache_and_gramhooks()
             else:
-                self.trainingsmemory = DynamicMemoryAge(initelements=initmemoryelements,
-                                                        memorymaximum=self.hparams.memorymaximum,
-                                                       gram_weights=self.hparams.gram_weights,
-                                                        seed=self.hparams.seed,
-                                                        perf_queue_len=self.hparams.len_perf_queue)
+                if verbose:
+                    logging.info('No continous learning, following parameters are invalidated: \n'
+                                 'transition_phase_after \n'
+                                 'cachemaximum \n'
+                                 'use_cache \n'
+                                 'random_cache \n'
+                                 'force_misclassified \n'
+                                 'direction')
+                self.hparams.use_memory = False
 
-                print(len(self.trainingsmemory.get_domainitems(0)))
+            self.stylemodel.to(device)
+            self.stylemodel.eval()
+
+            if self.hparams.continuous and self.hparams.use_memory:
+
+                initmemoryelements = self.getmemoryitems_from_base(num_items=self.hparams.memorymaximum)
+
+                if self.naive_continuous:
+                    self.trainingsmemory = NaiveDynamicMemoryAge(initelements=initmemoryelements,
+                                                                 insert_rate=self.hparams.naive_continuous_rate,
+                                                            memorymaximum=self.hparams.memorymaximum,
+                                                            gram_weights=self.hparams.gram_weights,
+                                                            seed=self.hparams.seed)
+                else:
+                    self.trainingsmemory = DynamicMemoryAge(initelements=initmemoryelements,
+                                                            memorymaximum=self.hparams.memorymaximum,
+                                                           gram_weights=self.hparams.gram_weights,
+                                                            seed=self.hparams.seed,
+                                                            perf_queue_len=self.hparams.len_perf_queue)
+
+                    print(len(self.trainingsmemory.get_domainitems(0)))
 
         if verbose:
             pprint(vars(self.hparams))
@@ -260,7 +261,7 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
                         if not v:
                             if len(self.trainingsmemory.domainMAE[k])==self.hparams.len_perf_queue:
                                 mae = np.mean(self.trainingsmemory.domainMAE[k])
-
+                                print('domain', k, mae, self.trainingsmemory.domainMAE[k])
                                 if mae<self.hparams.completion_limit:
                                     self.trainingsmemory.domaincomplete[k] = True
 
@@ -295,7 +296,6 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
                 grammatrix = [bg[i].detach().cpu().numpy().flatten() for bg in self.grammatrices]
                 new_mi = MemoryItem(img.detach().cpu(), y[i], filepath[i], scanner[i], grammatrix[0])
                 self.trainingsmemory.insert_element(new_mi)
-
 
             if len(self.trainingsmemory.forceitems)!=0:
                 xs, ys = self.trainingsmemory.get_training_batch(self.hparams.batch_size,
@@ -727,11 +727,11 @@ def trained_model(hparams, train=True):
         device = torch.device('cuda')
     else:
         device = torch.device('cpu')
-    model = FastGramDynamicMemoryBrainAge(hparams=hparams, device=device)
+    model = FastGramDynamicMemoryBrainAge(hparams=hparams, device=device, for_training=train)
     exp_name = utils.get_expname(model.hparams)
     weights_path = utils.TRAINED_MODELS_FOLDER + exp_name +'.pt'
     print(weights_path)
-    if not os.path.exists(utils.TRAINED_MODELS_FOLDER + exp_name + '.pt') and train:
+    if not os.path.exists(weights_path) and train:
         logger = pllogging.TestTubeLogger(utils.LOGGING_FOLDER, name=exp_name)
         trainer = Trainer(gpus=1, max_epochs=1, logger=logger,
                           val_check_interval=model.hparams.val_check_interval,
@@ -746,8 +746,17 @@ def trained_model(hparams, train=True):
             utils.save_memory_to_csv(model.trainingsmemory.memorylist, utils.TRAINED_MEMORY_FOLDER + exp_name + '.csv')
     elif os.path.exists(utils.TRAINED_MODELS_FOLDER + exp_name + '.pt'):
         print('Read: ' + weights_path)
-        model.load_state_dict(torch.load(weights_path, map_location=torch.device('cpu')))
+        state_dict = torch.load(weights_path)
+        new_state_dict = dict()
+        for k in state_dict.keys():
+            if k.startswith('model.'):
+                new_state_dict[k.replace("model.", "")] = state_dict[k]
+        model.model.load_state_dict(new_state_dict)
         model.freeze()
+    else:
+        print(weights_path, 'does not exist')
+        model = None
+        return model, None, None, exp_name + '.pt'
 
     if model.hparams.continuous and model.hparams.use_memory:
         if os.path.exists(utils.TRAINED_MEMORY_FOLDER + exp_name + '.csv'):
