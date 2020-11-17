@@ -3,6 +3,7 @@ import logging
 import math
 import os
 import random
+import skimage
 from pprint import pprint
 import numpy as np
 
