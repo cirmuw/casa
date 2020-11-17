@@ -4,6 +4,7 @@ import math
 import os
 import random
 import skimage
+import sklearn
 from pprint import pprint
 import numpy as np
 
