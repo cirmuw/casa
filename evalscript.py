@@ -80,9 +80,11 @@ def eval_testset(hparams, dsfile, dssplit, outfile, scanners=['1.5T Philips', '3
                 print('_________________________________')
     if os.path.exists(outfile):
         df_results = pd.read_csv(outfile)
-        df_results = df_results.append(pd.DataFrame({'mm':out_mm, 'sb': out_sb, 'postfix': out_post, 'scanner': out_scan, 'mae': out_mae, 'method': out_method}))
+        df_results = df_results.append(pd.DataFrame({'mm':out_mm, 'sb': out_sb, 'postfix': out_post, 'scanner': out_scan, 'mae': out_mae, 'method': out_method,
+                                                     'split': out_split}))
     else:
-        df_results = pd.DataFrame({'mm':out_mm, 'sb': out_sb, 'postfix': out_post, 'scanner': out_scan, 'mae': out_mae, 'method': out_method})
+        df_results = pd.DataFrame({'mm':out_mm, 'sb': out_sb, 'postfix': out_post, 'scanner': out_scan, 'mae': out_mae, 'method': out_method,
+                                   'split': out_split})
     df_results.to_csv(outfile, index=False) 
     
 def eval_forbwtfwt(hparams, dsfile, dssplit, outfile, method='casa', scanners=['1.5T Philips', '3.0T Philips', '3.0T'], 
@@ -160,7 +162,11 @@ def eval_forbwtfwt(hparams, dsfile, dssplit, outfile, method='casa', scanners=['
                 print('_________________________________')
     if os.path.exists(outfile):
         df_results = pd.read_csv(outfile)
-        df_results = df_results.append(pd.DataFrame({'mm':out_mm, 'sb': out_sb, 'postfix': out_post, 'scanner': out_scan, 'mae': out_mae, 'method': out_method}))
+        df_results = df_results.append(pd.DataFrame(
+            {'mm': out_mm, 'sb': out_sb, 'postfix': out_post, 'scanner': out_scan, 'mae': out_mae, 'method': out_method,
+             'shift': out_shift, 'split': out_split}))
     else:
-        df_results = pd.DataFrame({'mm':out_mm, 'sb': out_sb, 'postfix': out_post, 'scanner': out_scan, 'mae': out_mae, 'method': out_method})
+        df_results = pd.DataFrame(
+            {'mm': out_mm, 'sb': out_sb, 'postfix': out_post, 'scanner': out_scan, 'mae': out_mae, 'method': out_method,
+             'shift': out_shift, 'split': out_split})
     df_results.to_csv(outfile, index=False) 
