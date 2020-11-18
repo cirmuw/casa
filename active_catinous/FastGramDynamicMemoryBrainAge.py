@@ -415,6 +415,7 @@ class DynamicMemoryAge():
         self.memoryfull = False
         self.memorylist = initelements
         self.memorymaximum = memorymaximum
+
         self.samples_per_domain = memorymaximum
         self.gram_weigths = gram_weights
         self.domaincounter = {0: len(self.memorylist)} #0 is the base training domain
@@ -740,7 +741,7 @@ def trained_model(hparams, train=True):
                           gradient_clip_val=model.hparams.gradient_clip_val,
                           checkpoint_callback=False)
         trainer.fit(model)
-        if model.continuous:
+        if model.hparams.continuous:
             print('train counter', model.train_counter)
             print('label counter', model.trainingsmemory.labeling_counter)
         model.freeze()
