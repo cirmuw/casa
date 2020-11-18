@@ -83,3 +83,83 @@ def eval_testset(hparams, dsfile, dssplit, outfile, scanners=['1.5T Philips', '3
     else:
         df_results = pd.DataFrame({'mm':out_mm, 'sb': out_sb, 'postfix': out_post, 'scanner': out_scan, 'mae': out_mae, 'method': out_method})
     df_results.to_csv(outfile, index=False) 
+    
+def eval_forbwtfwt(hparams, dsfile, dssplit, outfile, method='casa', scanners=['1.5T Philips', '3.0T Philips', '3.0T'], 
+                   startbudgets=[85, 170, 212, 340], memorymaximas=[128], continuous_rate = None):
+    device = torch.device('cuda')
+    
+    data_loader = dict()
+    for s in scanners:
+        data_loader[s] = DataLoader(BrainAgeDataset(dsfile, split=dssplit, res=s), batch_size=2, num_workers=4)
+    
+    out_scan = []
+    out_mm = []
+    out_sb = []
+    out_post = []
+    out_mae = []
+    out_method = []
+    out_split = []
+    out_shift = []
+    
+    if startbudgets is not None:
+        budget_iterator = startbudgets
+    else:
+        budget_iterator = continuous_rate
+    
+    for mm in memorymaximas:
+        for bi in budget_iterator:
+            for j in range(3):
+                if startbudgets is not None:
+                    hparams['startbudget'] = bi
+                else:
+                    hparams['naive_continuous_rate'] = bi
+                    
+                hparams['memorymaximum'] = mm
+                hparams['run_postfix'] = j+1
+                model, _, _, _ = braincatsmodel.trained_model(hparams, train=False)
+                
+                print(f'{mm} {sb} {j}')
+                if model is not None:
+                    
+                    exp_name = cutils.get_expname(model.hparams)
+                    model.model.load_state_dict(torch.load(cutils.TRAINED_MODELS_FOLDER + exp_name + '_shift_1_ckpt.pt'))
+                    model.freeze()
+                    
+                    for k in data_loader:
+                        target, output = test_model(model, data_loader[k], device)
+                        out_scan.append(k)
+                        out_mm.append(mm)
+                        out_sb.append(bi)
+                        out_post.append(j+1)
+                        out_mae.append(mean_absolute_error(target, output))
+                        out_method.append(method)
+                        out_split.append(dssplit)
+                        out_shift.append(1)
+                        
+                    exp_name = cutils.get_expname(model.hparams)
+                    model.model.load_state_dict(torch.load(cutils.TRAINED_MODELS_FOLDER + exp_name + '_shift_2_ckpt.pt'))
+                    model.freeze()
+                    
+                    for k in data_loader:
+                        target, output = test_model(model, data_loader[k], device)
+                        out_scan.append(k)
+                        out_mm.append(mm)
+                        out_sb.append(bi)
+                        out_post.append(j+1)
+                        out_mae.append(mean_absolute_error(target, output))
+                        out_method.append(method)
+                        out_split.append(dssplit)
+                        out_shift.append(2)
+                        
+                else:
+                    print('model is none')
+
+                del model
+                torch.cuda.empty_cache()
+                print('_________________________________')
+    if os.path.exists(outfile):
+        df_results = pd.read_csv(outfile)
+        df_results = df_results.append(pd.DataFrame({'mm':out_mm, 'sb': out_sb, 'postfix': out_post, 'scanner': out_scan, 'mae': out_mae, 'method': out_method}))
+    else:
+        df_results = pd.DataFrame({'mm':out_mm, 'sb': out_sb, 'postfix': out_post, 'scanner': out_scan, 'mae': out_mae, 'method': out_method})
+    df_results.to_csv(outfile, index=False) 
