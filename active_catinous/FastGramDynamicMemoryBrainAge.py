@@ -740,8 +740,9 @@ def trained_model(hparams, train=True):
                           gradient_clip_val=model.hparams.gradient_clip_val,
                           checkpoint_callback=False)
         trainer.fit(model)
-        print('train counter', model.train_counter)
-        print('label counter', model.trainingsmemory.labeling_counter)
+        if model.continuous:
+            print('train counter', model.train_counter)
+            print('label counter', model.trainingsmemory.labeling_counter)
         model.freeze()
         torch.save(model.state_dict(), weights_path)
         if model.hparams.continuous and model.hparams.use_memory:
