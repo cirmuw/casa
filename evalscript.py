@@ -2,6 +2,7 @@ import active_catinous.FastGramDynamicMemoryBrainAge as braincatsmodel
 from active_catinous.FastGramDynamicMemoryBrainAge import FastGramDynamicMemoryBrainAge
 from datasets.BrainAgeDataset import BrainAgeDataset
 from datasets.BrainAgeContinuous import BrainAgeContinuous
+import active_catinous.utils as cutils
 from pytorch_lightning.callbacks import ModelCheckpoint
 from torch.utils.data import DataLoader
 import os
@@ -118,7 +119,7 @@ def eval_forbwtfwt(hparams, dsfile, dssplit, outfile, method='casa', scanners=['
                 hparams['run_postfix'] = j+1
                 model, _, _, _ = braincatsmodel.trained_model(hparams, train=False)
                 
-                print(f'{mm} {sb} {j}')
+                print(f'{mm} {bi} {j}')
                 if model is not None:
                     
                     exp_name = cutils.get_expname(model.hparams)
