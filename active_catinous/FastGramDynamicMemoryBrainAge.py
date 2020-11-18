@@ -741,11 +741,11 @@ def trained_model(hparams, train=True):
                           gradient_clip_val=model.hparams.gradient_clip_val,
                           checkpoint_callback=False)
         trainer.fit(model)
+        model.freeze()
+        torch.save(model.state_dict(), weights_path)
         if model.hparams.continuous:
             print('train counter', model.train_counter)
             print('label counter', model.trainingsmemory.labeling_counter)
-        model.freeze()
-        torch.save(model.state_dict(), weights_path)
         if model.hparams.continuous and model.hparams.use_memory:
             utils.save_memory_to_csv(model.trainingsmemory.memorylist, utils.TRAINED_MEMORY_FOLDER + exp_name + '.csv')
     elif os.path.exists(utils.TRAINED_MODELS_FOLDER + exp_name + '.pt'):
