@@ -12,7 +12,7 @@ import torch.nn.functional as F
 import argparse
 import pytorch_lightning as pl
 import sklearn 
-from sklearn.metrics import confusion_matrix, auc, roc_curve
+from sklearn.metrics import confusion_matrix, auc, roc_curve, mean_absolute_error
 import torch
 import pandas as pd
 import seaborn as sns
