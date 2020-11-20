@@ -24,7 +24,10 @@ class BrainAgeDataset(Dataset):
 
         if iterations is not None:
             if balance:
-                self.df = self.df.sample(iterations*batch_size, replace=True, random_state=seed, weights='weight')
+                if 'weight' in self.df:
+                    self.df = self.df.sample(iterations*batch_size, replace=True, random_state=seed, weights='weight')
+                else:
+                    self.df = self.df.sample(iterations*batch_size, replace=True, random_state=seed)
             else:
                 self.df = self.df.sample(iterations*batch_size, replace=True, random_state=seed)
             self.df = self.df.reset_index(drop=True)
