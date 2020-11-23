@@ -45,7 +45,7 @@ class MDTLUNADataset(Dataset):
         if channels==3:
             return np.tile(img, [3, 1, 1])
         else:
-            return img
+            return img[None, :, :]
 
 
     def load_annotation(self, elem):
