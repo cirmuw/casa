@@ -34,83 +34,82 @@ import collections
 
 class FastGramDynamicMemoryLungNodule(pl.LightningModule):
 
-    def __init__(self, hparams={}, device=torch.device('cpu'), verbose=True, for_training=True):
+    def __init__(self, hparams={}, device=torch.device('cpu'), verbose=True, training=True):
         super(FastGramDynamicMemoryLungNodule, self).__init__()
         self.hparams = utils.default_params(self.get_default_hparams(), hparams)
         self.hparams = argparse.Namespace(**self.hparams)
 
+        #print all parameters
+        if verbose:
+            for k in self.hparams:
+                print(k, self.hparams[k])
+
+        #read settings from hparams
+        print('reading settings from hparams')
         if 'naive_continuous' in self.hparams:
             self.naive_continuous = True
         else:
             self.naive_continuous = False
-
         self.learning_rate = self.hparams.learning_rate
-        self.train_counter = 0
-
         self.budget = self.hparams.startbudget
+
+        #init counters
+        print('init')
+        self.train_counter = 0
         self.budgetchangecounter = 0
         if self.hparams.allowedlabelratio==0:
             self.budgetrate = 0
         else:
             self.budgetrate = 1/self.hparams.allowedlabelratio
+        self.shiftcheckpoint_1 = False
+        self.shiftcheckpoint_2 = False
+        self.loss = nn.MSELoss()
+        self.mae = nn.L1Loss()
 
-        self.to(device)
-        print('init')
-
+        #init task model
+        print('init task model')
         self.model = retinanet.resnet18() #TODO: try different resnets for baseline
-        self.model.to(device)
         if not self.hparams.base_model is None:
+            print('read base model')
             state_dict =  torch.load(os.path.join(utils.TRAINED_MODELS_FOLDER, self.hparams.base_model))
             new_state_dict = {}
             for key in state_dict.keys():
                 new_state_dict[key.replace('model.', '')] = state_dict[key]
             self.model.load_state_dict(new_state_dict)
 
+        self.model.to(device)
+        self.to(device)
 
-        self.loss = nn.MSELoss()
-        self.mae = nn.L1Loss()
-
-        self.shiftcheckpoint_1 = False
-        self.shiftcheckpoint_2 = False
-
-        if for_training:
+        if not training:
+            print('only validation, no training model')
+        else:
+            print('init for training')
+            #init style model
             self.stylemodel = tvmodels.resnet50(pretrained=True)
-            if self.hparams.use_memory and self.hparams.continuous:
-                self.init_cache_and_gramhooks()
-            else:
-                if verbose:
-                    logging.info('No continous learning, following parameters are invalidated: \n'
-                                 'transition_phase_after \n'
-                                 'cachemaximum \n'
-                                 'use_cache \n'
-                                 'random_cache \n'
-                                 'force_misclassified \n'
-                                 'direction')
-                self.hparams.use_memory = False
-
             self.stylemodel.to(device)
             self.stylemodel.eval()
-
-            if self.hparams.continuous and self.hparams.use_memory:
+            if self.hparams.use_memory and self.hparams.continuous:
+                self.init_cache_and_gramhooks()
                 initmemoryelements = self.getmemoryitems_from_base(num_items=self.hparams.memorymaximum)
 
                 if self.naive_continuous:
+                    print('init naive memory')
                     self.trainingsmemory = NaiveDynamicMemoryLN(initelements=initmemoryelements,
-                                                                 insert_rate=self.hparams.naive_continuous_rate,
-                                                            memorymaximum=self.hparams.memorymaximum,
-                                                            gram_weights=self.hparams.gram_weights,
-                                                            seed=self.hparams.seed)
+                                                                insert_rate=self.hparams.naive_continuous_rate,
+                                                                memorymaximum=self.hparams.memorymaximum,
+                                                                gram_weights=self.hparams.gram_weights,
+                                                                seed=self.hparams.seed)
                 else:
+                    print('init CASA memory')
                     self.trainingsmemory = DynamicMemoryLN(initelements=initmemoryelements,
-                                                            memorymaximum=self.hparams.memorymaximum,
+                                                           memorymaximum=self.hparams.memorymaximum,
                                                            gram_weights=self.hparams.gram_weights,
-                                                            seed=self.hparams.seed,
-                                                            perf_queue_len=self.hparams.len_perf_queue)
+                                                           seed=self.hparams.seed,
+                                                           perf_queue_len=self.hparams.len_perf_queue)
 
                     print(len(self.trainingsmemory.get_domainitems(0)))
-
-        if verbose:
-            pprint(vars(self.hparams))
+            else:
+                self.hparams.use_memory = False
 
     @staticmethod
     def get_default_hparams():
@@ -143,16 +142,15 @@ class FastGramDynamicMemoryLungNodule(pl.LightningModule):
         return hparams
 
     def getmemoryitems_from_base(self, num_items=128):
-        dl = DataLoader(BrainAgeDataset(self.hparams.datasetfile,
+        dl = DataLoader(LUNADataset(self.hparams.datasetfile,
                                    iterations=None,
                                    batch_size=self.hparams.batch_size,
                                    split=['base_train']),
-                   batch_size=self.hparams.batch_size, num_workers=4, pin_memory=True)
+                   batch_size=self.hparams.batch_size, num_workers=4, pin_memory=True, shuffle=True)
 
         memoryitems = []
         for batch in dl:
             torch.cuda.empty_cache()
-
 
             x, y, filepath, scanner = batch
             x = x.to(self.device)
@@ -167,8 +165,6 @@ class FastGramDynamicMemoryLungNodule(pl.LightningModule):
                 break
 
             self.grammatrices = []
-
-
         return memoryitems[:num_items]
 
 
@@ -176,42 +172,26 @@ class FastGramDynamicMemoryLungNodule(pl.LightningModule):
         self.grammatrices = []
         self.gramlayers = [
             self.stylemodel.layer2[-1].conv1]
-        self.register_hooks()
-        logging.info('Gram hooks and memory initialized. Cachesize: %i' % self.hparams.memorymaximum)
 
-    def gram_matrix(self, input):
-        # taken from: https://pytorch.org/tutorials/advanced/neural_style_tutorial.html
-        a, b, c, d = input.size()  # a=batch size(=1)
-        # b=number of feature maps
-        # (c,d)=dimensions of a f. map (N=c*d)
-
-        grams = []
-
-        for i in range(a):
-            features = input[i].view(b, c * d)  # resise F_XL into \hat F_XL
-            G = torch.mm(features, features.t())  # compute the gram product
-            grams.append(G.div(b * c * d))
-
-        return grams
-
-    def gram_hook(self, m, input, output):
-        self.grammatrices.append(self.gram_matrix(input[0]))
-
-    def register_hooks(self):
+        #register hooks
         for layer in self.gramlayers:
             layer.register_forward_hook(self.gram_hook)
+        logging.info('Gram hooks and memory initialized. Cachesize: %i' % self.hparams.memorymaximum)
+
+    def gram_hook(self, m, input, output):
+        self.grammatrices.append(utils.gram_matrix(input[0]))
 
     def training_step(self, batch, batch_idx):
         x, y, filepath, scanner = batch
 
         self.budget += len(filepath) * self.budgetrate
 
-        if 'geb' in scanner and not self.shiftcheckpoint_1:
+        if self.hparms.order[1] in scanner and not self.shiftcheckpoint_1:
             exp_name = utils.get_expname(self.hparams)
             weights_path = utils.TRAINED_MODELS_FOLDER + exp_name + '_shift_1_ckpt.pt'
             torch.save(self.model.state_dict(), weights_path)
             self.shiftcheckpoint_1 = True
-        if 'sie' in scanner and not self.shiftcheckpoint_2:
+        if self.hparms.order[2] in scanner and not self.shiftcheckpoint_2:
             exp_name = utils.get_expname(self.hparams)
             weights_path = utils.TRAINED_MODELS_FOLDER + exp_name + '_shift_2_ckpt.pt'
             torch.save(self.model.state_dict(), weights_path)
@@ -219,7 +199,6 @@ class FastGramDynamicMemoryLungNodule(pl.LightningModule):
 
         if not self.naive_continuous and self.hparams.use_memory:
                 torch.cuda.empty_cache()
-
                 y = y[:, None]
                 self.grammatrices = []
                 y_style = self.stylemodel(x.float())
@@ -239,15 +218,13 @@ class FastGramDynamicMemoryLungNodule(pl.LightningModule):
                 else:
                     self.budgetchangecounter=1
 
-                #form trainings X domain balanced batches to train one epoch on all newly inserted samples
-                #print(self.trainingsmemory.domaincomplete.items())
-                if not np.all(list(self.trainingsmemory.domaincomplete.values())) and self.budgetchangecounter<10: #only train when a domain is incomplete and new samples are inserted?
+                if not np.all(list(self.trainingsmemory.domaincomplete.values())) and self.budgetchangecounter<10:
                     for k, v in self.trainingsmemory.domaincomplete.items():
                         if not v:
                             if len(self.trainingsmemory.domainMAE[k])==self.hparams.len_perf_queue:
-                                mae = np.mean(self.trainingsmemory.domainMAE[k])
-                                print('domain', k, mae, self.trainingsmemory.domainMAE[k])
-                                if mae<self.hparams.completion_limit:
+                                meanperf = np.mean(self.trainingsmemory.domainPerf[k])
+                                print('domain', k, meanperf, self.trainingsmemory.domainPerf[k])
+                                if meanperf<self.hparams.completion_limit: #TODO < or > depending on metric
                                     self.trainingsmemory.domaincomplete[k] = True
 
                     xs, ys = self.trainingsmemory.get_training_batch(self.hparams.batch_size,
@@ -354,7 +331,6 @@ class FastGramDynamicMemoryLungNodule(pl.LightningModule):
         return {'log': tensorboard_logs}
 
     def configure_optimizers(self):
-        #return torch.optim.Adam(self.parameters(), lr=0.00005)
         return torch.optim.Adam(self.parameters(), lr=self.learning_rate)
 
 
@@ -392,15 +368,14 @@ class FastGramDynamicMemoryLungNodule(pl.LightningModule):
                           batch_size=4,
                           num_workers=2, pin_memory=False, drop_last=False)
 
-class DynamicMemoryAge():
+class DynamicMemoryLN():
 
-    def __init__(self, initelements, memorymaximum=256, gram_weights=None, seed=None, transformgrams=True, perf_queue_len=5):
+    def __init__(self, initelements, memorymaximum=256, seed=None, transformgrams=True, perf_queue_len=5):
         self.memoryfull = False
         self.memorylist = initelements
         self.memorymaximum = memorymaximum
 
         self.samples_per_domain = memorymaximum
-        self.gram_weigths = gram_weights
         self.domaincounter = {0: len(self.memorylist)} #0 is the base training domain
         self.max_per_domain = memorymaximum
         self.seed = seed
@@ -543,7 +518,7 @@ class DynamicMemoryAge():
                     n_estimators = len(clf.estimators_) + 1
                     clf.__setattr__('n_estimators', n_estimators)
                 else:
-                    clf = IsolationForest(n_estimators=10, random_state=16131345)
+                    clf = IsolationForest(n_estimators=10)
 
                 clf.fit(domain_grams)
                 self.isoforests[domain] = clf
@@ -617,7 +592,7 @@ class DynamicMemoryAge():
                 items.append(mi)
         return items
 
-class NaiveDynamicMemoryAge():
+class NaiveDynamicMemoryLN():
 
     def __init__(self, initelements, memorymaximum=256, insert_rate=10, gram_weights=None, seed=None):
         self.memoryfull = False

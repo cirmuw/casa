@@ -6,6 +6,8 @@ import torch.utils.model_zoo as model_zoo
 import numpy as np
 from nms import nms
 
+#https://github.com/yhenon/pytorch-retinanet/
+
 model_urls = {
     'resnet18': 'https://download.pytorch.org/models/resnet18-5c106cde.pth',
     'resnet34': 'https://download.pytorch.org/models/resnet34-333f7ec4.pth',
@@ -196,11 +198,11 @@ class Anchors(nn.Module):
         super(Anchors, self).__init__()
 
         if pyramid_levels is None:
-            self.pyramid_levels = [3, 4, 5, 6, 7]
+            self.pyramid_levels = [2, 3, 4, 5, 6]
         if strides is None:
             self.strides = [2 ** x for x in self.pyramid_levels]
         if sizes is None:
-            self.sizes = [2 ** x for x in self.pyramid_levels]
+            self.sizes = [2 ** (x + 2) for x in self.pyramid_levels]
         if ratios is None:
             self.ratios = np.array([0.5, 1, 2])
         if scales is None:
@@ -728,7 +730,7 @@ class ResNet(nn.Module):
                 #anchors_nms_idx = nms(anchorBoxes, scores, 0.5)
 
                 xywh = [[ab[0], ab[1], ab[2] - ab[0], ab[3] - ab[1]] for ab in anchorBoxes.cpu().detach().numpy()]
-                anchors_nms_idx = nms.boxes(xywh, scores, nms_threshold=0.3)
+                anchors_nms_idx = nms.boxes(xywh, scores, nms_threshold=0.2)
                 print(anchors_nms_idx)
                 finalResult[0].extend(scores[anchors_nms_idx])
                 finalResult[1].extend(torch.tensor([i] * len(anchors_nms_idx)))

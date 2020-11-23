@@ -114,3 +114,33 @@ def norm01(x):
     if m > 0:
         r = np.divide(r, np.max(r))
     return r
+
+def gram_matrix(input):
+    # taken from: https://pytorch.org/tutorials/advanced/neural_style_tutorial.html
+    a, b, c, d = input.size()  # a=batch size(=1)
+    # b=number of feature maps
+    # (c,d)=dimensions of a f. map (N=c*d)
+
+    grams = []
+
+    for i in range(a):
+        features = input[i].view(b, c * d)  # resise F_XL into \hat F_XL
+        G = torch.mm(features, features.t())  # compute the gram product
+        grams.append(G.div(b * c * d))
+
+    return grams
+
+def gram_matrix_3d(input):
+    # taken from: https://pytorch.org/tutorials/advanced/neural_style_tutorial.html
+    a, b, c, d, e = input.size()  # a=batch size(=1)
+    # b=number of feature maps
+    # (c,d)=dimensions of a f. map (N=c*d)
+
+    grams = []
+
+    for i in range(a):
+        features = input[i].view(b, c * d * e)  # resise F_XL into \hat F_XL
+        G = torch.mm(features, features.t())  # compute the gram product
+        grams.append(G.div(b * c * d * e))
+
+    return grams
