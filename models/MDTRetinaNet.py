@@ -527,6 +527,7 @@ class net(nn.Module):
         gt_boxes = batch['bb_target']
 
         #img = torch.from_numpy(img).float().cuda()
+        img = img.to(torch.device('cuda'))
         batch_class_loss = torch.FloatTensor([0]).cuda()
         batch_bbox_loss = torch.FloatTensor([0]).cuda()
 
@@ -596,6 +597,8 @@ class net(nn.Module):
         """
         img = batch['data']
         #img = torch.from_numpy(img).float().cuda()
+        img = img.to(torch.device('cuda'))
+
         detections, _, _, seg_logits = self.forward(img)
         results_dict = get_results(self.cf, img.shape, detections, seg_logits)
         return results_dict
