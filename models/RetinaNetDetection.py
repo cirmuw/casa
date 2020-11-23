@@ -2,7 +2,7 @@ import torch.nn as nn
 import torch
 import math
 import torch.utils.model_zoo as model_zoo
-from torchvision.ops import nms
+#from torchvision.ops import nms
 import numpy as np
 from nms import nms
 
