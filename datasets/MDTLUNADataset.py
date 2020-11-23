@@ -74,7 +74,7 @@ class MDTLUNADataset(Dataset):
         batch = dict()
         batch['data'] = img
         batch['roi_labels'] = elem.label
-        batch['bb_target'] = self.load_image(elem)
+        batch['bb_target'] = self.load_annotation(elem)
         batch['scanner'] =  elem.res
         batch['img'] = elem.image
 
