@@ -595,7 +595,7 @@ class net(nn.Module):
                             retina_unet and dummy array for retina_net.
         """
         img = batch['data']
-        img = torch.from_numpy(img).float().cuda()
+        #img = torch.from_numpy(img).float().cuda()
         detections, _, _, seg_logits = self.forward(img)
         results_dict = get_results(self.cf, img.shape, detections, seg_logits)
         return results_dict

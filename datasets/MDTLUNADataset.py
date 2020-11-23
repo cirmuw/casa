@@ -37,12 +37,15 @@ class MDTLUNADataset(Dataset):
         return len(self.df)
 
 
-    def load_image(self, path):
+    def load_image(self, path, channels=1):
         img = pyd.read_file(path).pixel_array
         img = mut.intensity_window(img, low=-1024, high=400)
         img = mut.norm01(img)
 
-        return np.tile(img, [3, 1, 1])
+        if channels==3:
+            return np.tile(img, [3, 1, 1])
+        else:
+            return img
 
 
     def load_annotation(self, elem):
