@@ -526,7 +526,7 @@ class net(nn.Module):
         gt_class_ids = batch['roi_labels']
         gt_boxes = batch['bb_target']
 
-        img = torch.from_numpy(img).float().cuda()
+        #img = torch.from_numpy(img).float().cuda()
         batch_class_loss = torch.FloatTensor([0]).cuda()
         batch_bbox_loss = torch.FloatTensor([0]).cuda()
 
