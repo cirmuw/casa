@@ -38,6 +38,9 @@ class config():
             [[int(np.ceil(self.patch_size[0] / stride)),
               int(np.ceil(self.patch_size[1] / stride))]
              for stride in self.backbone_strides['xy']])
+        
+        self.n_channels = 1 #can be set to 3 to include prev and succ slice
+        self.norm = None
 
 
 ############################################################
@@ -293,11 +296,11 @@ class FPN(nn.Module):
 
         self.start_filts = cf.start_filts
         start_filts = self.start_filts
-        self.n_blocks = [3, 4, {"resnet50": 6, "resnet101": 23}[cf.res_architecture], 3]
+        self.n_blocks = [3, 4, 6, 3]
         self.block = ResBlock
         self.block_expansion = 4
         self.operate_stride1 = operate_stride1
-        self.sixth_pooling = cf.sixth_pooling
+        self.sixth_pooling = False#cf.sixth_pooling
         self.dim = conv.dim
 
         if operate_stride1:
@@ -357,7 +360,7 @@ class FPN(nn.Module):
             self.P2_upsample = Interpolate(scale_factor=(2, 2, 1), mode='trilinear')
 
         self.out_channels = cf.end_filts
-        self.P5_conv1 = conv(start_filts*32 + cf.n_latent_dims, self.out_channels, ks=1, stride=1, relu=None) #
+        self.P5_conv1 = conv(start_filts*32, self.out_channels, ks=1, stride=1, relu=None) #
         self.P4_conv1 = conv(start_filts*16, self.out_channels, ks=1, stride=1, relu=None)
         self.P3_conv1 = conv(start_filts*8, self.out_channels, ks=1, stride=1, relu=None)
         self.P2_conv1 = conv(start_filts*4, self.out_channels, ks=1, stride=1, relu=None)
