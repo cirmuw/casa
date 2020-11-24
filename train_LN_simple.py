@@ -8,7 +8,7 @@ import numpy as np
 import models.MDTRetinaNet as mdtr
 
 
-def train_loop(ds_path, ds_split, savepath, lr=1e-4, scheduler_steps=10, n_slices=1, scheduler=None, epochs=50):
+def train_loop(ds_path, ds_split, savepath, lr=1e-4, scheduler_steps=10, n_slices=1, epochs=50):
     cf = mdtr.config()
     logger = logging.getLogger('medicaldetectiontoolkit')
     logger.setLevel(logging.DEBUG)
