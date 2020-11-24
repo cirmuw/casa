@@ -11,7 +11,7 @@ import pydicom as pyd
 
 class MDTLUNADataset(Dataset):
 
-    def __init__(self, datasetfile, split=['train'], iterations=None, batch_size=None, res=None, labelDebug=None):
+    def __init__(self, datasetfile, split=['train'], iterations=None, batch_size=None, res=None, labelDebug=None, n_slices=1):
         df = pd.read_csv(datasetfile, index_col=0)
         if type(split) is list:
             selection = np.any([df.split==x for x in split], axis=0)
@@ -32,22 +32,36 @@ class MDTLUNADataset(Dataset):
             self.df = self.df.sample(iterations*batch_size, replace=True)
             self.df = self.df.reset_index(drop=True)
 
+        self.n_slices = n_slices
+
 
     def __len__(self):
         return len(self.df)
 
 
     def load_image(self, path, channels=1):
-        img = pyd.read_file(path).pixel_array
-        img = mut.intensity_window(img, low=-1024, high=400)
-        img = mut.resize(img, (288, 288))
-        img = mut.norm01(img)
+        if self.n_slices==1:
+            img = pyd.read_file(path).pixel_array
+            img = mut.intensity_window(img, low=-1024, high=400)
+            img = mut.resize(img, (288, 288))
+            img = mut.norm01(img)
 
 
-        if channels==3:
-            return np.tile(img, [3, 1, 1])
+            if channels==3:
+                return np.tile(img, [3, 1, 1])
+            else:
+                return img[None, :, :]
         else:
-            return img[None, :, :]
+            reader = sitk.ImageSeriesReader()
+
+            dicom_names = reader.GetGDCMSeriesFileNames(os.path.dirname(path))
+            idx_slice = dicom_names.index(path)
+            dicom_names = dicom_names[idx_slice - round(self.n_slices/2): idx_slice + round(self.n_slices/2)+1]
+            reader.SetFileNames(dicom_names)
+            image = reader.Execute()
+            img = sitk.GetArrayFromImage(image)
+
+            return img
 
 
     def load_annotation(self, elem):
@@ -78,7 +92,7 @@ class MDTLUNADataset(Dataset):
 
         batch = dict()
         batch['data'] = img
-        batch['roi_labels'] = elem.label[None, :]
+        batch['roi_labels'] = [elem.label]
         batch['bb_target'] = self.load_annotation(elem)
         batch['scanner'] =  elem.res
         batch['img'] = elem.image
