@@ -10,23 +10,32 @@ from nms import nms
 #File: retina_net.py
 
 class config():
-    def __init__(self):
-        self.dim = 2
-        self.pre_crop_size = [300, 300]
-        self.patch_size = [512, 512]
+    def __init__(self, dim=2, n_slices=1):
+        self.dim = dim # or 3
+        self.patch_size_2D = [512, 512]
+        self.patch_size_3D = [128, 128, 64] #TODO fill in!
+        self.patch_size = self.patch_size_2D if self.dim == 2 else self.patch_size_3D
         self.head_classes = 2
-        self.start_filts = 48
-        self.end_filts = self.start_filts * 4
-        self.n_rpn_features = 512
+        self.start_filts = 48 if self.dim == 2 else 18
+        self.end_filts = self.start_filts * 4 if self.dim == 2 else self.start_filts * 2
+        self.n_rpn_features = 512 if self.dim == 2 else 64
         self.rpn_anchor_ratios = [0.5, 1, 2]
         self.rpn_anchor_stride = 1
         self.n_anchors_per_pos = len(self.rpn_anchor_ratios) #* 3
         self.relu = 'relu' #alternativ: leaky_relu
-        self.pre_nms_limit = 3000
-        self.rpn_bbox_std_dev = np.array([0.1, 0.1, 0.1, 0.2])
-        self.bbox_std_dev = np.array([0.1, 0.1, 0.1, 0.2])
-        self.window = np.array([0, 0, self.patch_size[0], self.patch_size[1]])
-        self.scale = np.array([self.patch_size[0], self.patch_size[1], self.patch_size[0], self.patch_size[1]])
+        self.pre_nms_limit = 10000 if self.dim == 2 else 50000
+
+        self.rpn_bbox_std_dev = np.array([0.1, 0.1, 0.1, 0.2, 0.2, 0.2])
+        self.bbox_std_dev = np.array([0.1, 0.1, 0.1, 0.2, 0.2, 0.2])
+        self.window = np.array([0, 0, self.patch_size[0], self.patch_size[1], 0, self.patch_size_3D[2]])
+        self.scale = np.array([self.patch_size[0], self.patch_size[1], self.patch_size[0], self.patch_size[1],
+                               self.patch_size_3D[2], self.patch_size_3D[2]])
+        if self.dim == 2:
+            self.rpn_bbox_std_dev = self.rpn_bbox_std_dev[:4]
+            self.bbox_std_dev = self.bbox_std_dev[:4]
+            self.window = self.window[:4]
+            self.scale = self.scale[:4]
+
         self.model_max_instances_per_batch_element = 10  # per batch element and class.
         self.detection_nms_threshold = 1e-5  # needs to be > 0, otherwise all predictions are one cluster.
         self.model_min_confidence = 0.1
@@ -39,7 +48,7 @@ class config():
               int(np.ceil(self.patch_size[1] / stride))]
              for stride in self.backbone_strides['xy']])
         
-        self.n_channels = 3 #can be set to 3 to include prev and succ slice
+        self.n_channels = n_slices #can be set to 3 to include prev and succ slice
         self.norm = 'batch_norm'
         self.rpn_train_anchors_per_image = 6  #per batch element
         self.train_rois_per_image = 6 #per batch element
@@ -194,7 +203,7 @@ def refine_detections(anchors, probs, deltas, batch_ixs, cf):
             ix_rois = ix_rois[order, :]
 
             xywh = [[ab[0], ab[1], ab[2] - ab[0], ab[3] - ab[1]] for ab in ix_rois.cpu().detach().numpy()]
-            class_keep = nms.boxes(xywh, ix_scores.cpu().detach().numpy(), nms_threshold=cf.detection_nms_threshold)
+            class_keep = nms.boxes(xywh, ix_scores.cpu().detach().numpy(), nms_threshold=0.5)
 
             #if cf.dim == 2:
             #    class_keep = nms_2D(torch.cat((ix_rois, ix_scores.unsqueeze(1)), dim=1), cf.detection_nms_threshold)
