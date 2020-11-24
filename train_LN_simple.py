@@ -9,10 +9,13 @@ import models.MDTRetinaNet as mdtr
 
 
 def train_loop(ds_path, ds_split, savepath, lr=1e-4, scheduler_steps=10, n_slices=1, epochs=50):
-    cf = mdtr.config()
+    device = torch.device('cuda')
+    cf = mdtr.config(n_slices=n_slices)
     logger = logging.getLogger('medicaldetectiontoolkit')
     logger.setLevel(logging.DEBUG)
     model = mdtr.net(cf, logger)
+
+    model.to(device)
 
     ds = MDTLUNADataset(ds_path, split=ds_split, n_slices=n_slices)
     dl = DataLoader(ds, batch_size=4, num_workers=4, shuffle=True)
