@@ -64,7 +64,7 @@ class MDTLUNADataset(Dataset):
         x2 = x+int(diameter/spacing)
         y2 = y+int(diameter/spacing)
 
-        box = np.zeros((1, 5))
+        box = np.zeros((1, 4))
         box[0, 0] = x
         box[0, 1] = y
         box[0, 2] = x2
@@ -78,7 +78,7 @@ class MDTLUNADataset(Dataset):
 
         batch = dict()
         batch['data'] = img
-        batch['roi_labels'] = elem.label
+        batch['roi_labels'] = elem.label[None, :]
         batch['bb_target'] = self.load_annotation(elem)
         batch['scanner'] =  elem.res
         batch['img'] = elem.image
