@@ -40,7 +40,9 @@ class MDTLUNADataset(Dataset):
     def load_image(self, path, channels=1):
         img = pyd.read_file(path).pixel_array
         img = mut.intensity_window(img, low=-1024, high=400)
+        img = mut.resize(img, (288, 288))
         img = mut.norm01(img)
+
 
         if channels==3:
             return np.tile(img, [3, 1, 1])
