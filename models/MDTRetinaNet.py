@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils
-import nms
+from nms import nms
 
 ## Taken from https://github.com/MIC-DKFZ/medicaldetectiontoolkit/
 
@@ -13,14 +13,14 @@ class config():
     def __init__(self):
         self.dim = 2
         self.pre_crop_size = [300, 300]
-        self.patch_size = [288, 288]
+        self.patch_size = [512, 512]
         self.head_classes = 2
         self.start_filts = 48
         self.end_filts = self.start_filts * 4
         self.n_rpn_features = 512
         self.rpn_anchor_ratios = [0.5, 1, 2]
         self.rpn_anchor_stride = 1
-        self.n_anchors_per_pos = len(self.rpn_anchor_ratios) * 3
+        self.n_anchors_per_pos = len(self.rpn_anchor_ratios) #* 3
         self.relu = 'relu' #alternativ: leaky_relu
         self.pre_nms_limit = 3000
         self.rpn_bbox_std_dev = np.array([0.1, 0.1, 0.1, 0.2])
@@ -39,8 +39,12 @@ class config():
               int(np.ceil(self.patch_size[1] / stride))]
              for stride in self.backbone_strides['xy']])
         
-        self.n_channels = 1 #can be set to 3 to include prev and succ slice
-        self.norm = None
+        self.n_channels = 3 #can be set to 3 to include prev and succ slice
+        self.norm = 'batch_norm'
+        self.rpn_train_anchors_per_image = 6  #per batch element
+        self.train_rois_per_image = 6 #per batch element
+        self.roi_positive_ratio = 0.5
+        self.anchor_matching_iou = 0.7
 
 
 ############################################################
@@ -142,25 +146,32 @@ def refine_detections(anchors, probs, deltas, batch_ixs, cf):
     :param batch_ixs: (n_proposals) batch element assignemnt info for re-allocation.
     :return: result: (n_final_detections, (y1, x1, y2, x2, (z1), (z2), batch_ix, pred_class_id, pred_score))
     """
-    anchors = anchors.repeat(len(np.unique(batch_ixs)), 1)
 
+    anchors = anchors.repeat(len(np.unique(batch_ixs.cpu())), 1)
     # flatten foreground probabilities, sort and trim down to highest confidences by pre_nms limit.
     fg_probs = probs[:, 1:].contiguous()
     flat_probs, flat_probs_order = fg_probs.view(-1).sort(descending=True)
     keep_ix = flat_probs_order[:cf.pre_nms_limit]
     # reshape indices to 2D index array with shape like fg_probs.
-    keep_arr = torch.cat(((keep_ix / fg_probs.shape[1]).unsqueeze(1), (keep_ix % fg_probs.shape[1]).unsqueeze(1)), 1)
+    # keep_arr = torch.cat(((keep_ix / fg_probs.shape[1]).unsqueeze(1), (keep_ix % fg_probs.shape[1]).unsqueeze(1)), 1)
 
-    pre_nms_scores = flat_probs[:cf.pre_nms_limit]
+    keep_arr = torch.cat((torch.round(torch.div(keep_ix.float(), 2)).unsqueeze(1), (keep_ix % fg_probs.shape[1]).unsqueeze(1)), 1)
+    keep_arr = keep_arr.long()
+
+    pre_nms_scores = flat_probs[:cf.pre_nms_limit]    
     pre_nms_class_ids = keep_arr[:, 1] + 1  # add background again.
     pre_nms_batch_ixs = batch_ixs[keep_arr[:, 0]]
     pre_nms_anchors = anchors[keep_arr[:, 0]]
     pre_nms_deltas = deltas[keep_arr[:, 0]]
-    keep = torch.arange(pre_nms_scores.size()[0]).long().cuda()
+
+    keep = torch.arange(pre_nms_scores.size()[0]).long()#.to(torch.device('cuda'))
 
     # apply bounding box deltas. re-scale to image coordinates.
     std_dev = torch.from_numpy(np.reshape(cf.rpn_bbox_std_dev, [1, cf.dim * 2])).float().cuda()
     scale = torch.from_numpy(cf.scale).float().cuda()
+
+    pre_nms_anchors = pre_nms_anchors.cuda()
+    pre_nms_deltas = pre_nms_deltas.cuda()
     refined_rois = apply_box_deltas_2D(pre_nms_anchors / scale, pre_nms_deltas * std_dev) * scale
 
     # round and cast to int since we're deadling with pixels now
@@ -183,7 +194,7 @@ def refine_detections(anchors, probs, deltas, batch_ixs, cf):
             ix_rois = ix_rois[order, :]
 
             xywh = [[ab[0], ab[1], ab[2] - ab[0], ab[3] - ab[1]] for ab in ix_rois.cpu().detach().numpy()]
-            class_keep = nms.boxes(xywh, ix_scores, nms_threshold=cf.detection_nms_threshold)
+            class_keep = nms.boxes(xywh, ix_scores.cpu().detach().numpy(), nms_threshold=cf.detection_nms_threshold)
 
             #if cf.dim == 2:
             #    class_keep = nms_2D(torch.cat((ix_rois, ix_scores.unsqueeze(1)), dim=1), cf.detection_nms_threshold)
@@ -299,11 +310,11 @@ class FPN(nn.Module):
         self.n_blocks = [3, 4, 6, 3]
         self.block = ResBlock
         self.block_expansion = 4
-        self.operate_stride1 = operate_stride1
+        self.operate_stride1 = False
         self.sixth_pooling = False#cf.sixth_pooling
         self.dim = conv.dim
 
-        if operate_stride1:
+        if self.operate_stride1:
             self.C0 = nn.Sequential(conv(cf.n_channels, start_filts, ks=3, pad=1, norm=cf.norm, relu=cf.relu),
                                     conv(start_filts, start_filts, ks=3, pad=1, norm=cf.norm, relu=cf.relu))
 
@@ -366,7 +377,7 @@ class FPN(nn.Module):
         self.P2_conv1 = conv(start_filts*4, self.out_channels, ks=1, stride=1, relu=None)
         self.P1_conv1 = conv(start_filts, self.out_channels, ks=1, stride=1, relu=None)
 
-        if operate_stride1:
+        if self.operate_stride1:
             self.P0_conv1 = conv(start_filts, self.out_channels, ks=1, stride=1, relu=None)
             self.P0_conv2 = conv(self.out_channels, self.out_channels, ks=3, stride=1, pad=1, relu=None)
 
@@ -527,14 +538,13 @@ class net(nn.Module):
         gt_boxes = batch['bb_target']
 
         #img = torch.from_numpy(img).float().cuda()
-        img = torch.FloatTensor(img).to(torch.device('cuda'))
+        img = img.float().to(torch.device('cuda'))
         batch_class_loss = torch.FloatTensor([0]).cuda()
         batch_bbox_loss = torch.FloatTensor([0]).cuda()
 
         # list of output boxes for monitoring/plotting. each element is a list of boxes per batch element.
         box_results_list = [[] for _ in range(img.shape[0])]
         detections, class_logits, pred_deltas, seg_logits = self.forward(img)
-
         # loop over batch
         for b in range(img.shape[0]):
 
@@ -564,10 +574,9 @@ class net(nn.Module):
             # compute losses.
             class_loss, neg_anchor_ix = compute_class_loss(anchor_class_match, class_logits[b])
             bbox_loss = compute_bbox_loss(anchor_target_deltas, pred_deltas[b], anchor_class_match)
-
             # add negative anchors used for loss to results_dict for monitoring.
             neg_anchors = clip_boxes_numpy(
-                self.np_anchors[np.argwhere(anchor_class_match == -1)][0, neg_anchor_ix], img.shape[2:])
+                self.np_anchors[np.argwhere(anchor_class_match.cpu() == -1)][0, neg_anchor_ix], img.shape[2:])
             for n in neg_anchors:
                 box_results_list[b].append({'box_coords': n, 'box_type': 'neg_anchor'})
 
@@ -577,7 +586,7 @@ class net(nn.Module):
         results_dict = get_results(self.cf, img.shape, detections, seg_logits, box_results_list)
         loss = batch_class_loss + batch_bbox_loss
         results_dict['torch_loss'] = loss
-        results_dict['monitor_values'] = {'loss': loss.item(), 'class_loss': batch_class_loss.item()}
+        results_dict['monitor_values'] = {'loss': loss.item(), 'class_loss': batch_class_loss.item(), 'box_loss': batch_bbox_loss.item()}
         results_dict['logger_string'] = "loss: {0:.2f}, class: {1:.2f}, bbox: {2:.2f}"\
             .format(loss.item(), batch_class_loss.item(), batch_bbox_loss.item())
 
@@ -597,7 +606,7 @@ class net(nn.Module):
         """
         img = batch['data']
         #img = torch.from_numpy(img).float().cuda()
-        img = torch.FloatTensor(img).to(torch.device('cuda'))
+        img = img.float().to(torch.device('cuda'))
 
         detections, _, _, seg_logits = self.forward(img)
         results_dict = get_results(self.cf, img.shape, detections, seg_logits)
@@ -618,7 +627,6 @@ class net(nn.Module):
         fpn_outs = self.Fpn(img)
         seg_logits = None
         selected_fmaps = [fpn_outs[i] for i in self.cf.pyramid_levels]
-
         # Loop through pyramid layers
         class_layer_outputs, bb_reg_layer_outputs = [], []  # list of lists
         for p in selected_fmaps:
@@ -633,7 +641,6 @@ class net(nn.Module):
         class_logits = [torch.cat(list(o), dim=1) for o in class_logits][0]
         bb_outputs = list(zip(*bb_reg_layer_outputs))
         bb_outputs = [torch.cat(list(o), dim=1) for o in bb_outputs][0]
-
         # merge batch_dimension and store info in batch_ixs for re-allocation.
         batch_ixs = torch.arange(class_logits.shape[0]).unsqueeze(1).repeat(1, class_logits.shape[1]).view(-1).cuda()
         flat_class_softmax = F.softmax(class_logits.view(-1, class_logits.shape[-1]), 1)
@@ -774,7 +781,7 @@ def unique1d(tensor):
         return tensor
     tensor = tensor.sort()[0]
     unique_bool = tensor[1:] != tensor [:-1]
-    first_element = torch.ByteTensor([True], requires_grad=False)
+    first_element = torch.tensor([True], requires_grad=False)
     if tensor.is_cuda:
         first_element = first_element.cuda()
     unique_bool = torch.cat((first_element, unique_bool),dim=0)
@@ -901,7 +908,7 @@ def generate_pyramid_anchors(logger, cf):
                                         feature_strides['xy'][level], anchor_stride))
         logger.info("level {}: built anchors {} / expected anchors {} ||| total build {} / total expected {}".format(
             level, anchors[-1].shape, expected_anchors[lix], np.concatenate(anchors).shape, np.sum(expected_anchors)))
-
+        
     out_anchors = np.concatenate(anchors, axis=0)
     return out_anchors
 

@@ -7,6 +7,7 @@ import numpy as np
 import nibabel as nib
 import torch
 import pydicom as pyd
+import math
 
 
 class MDTLUNADataset(Dataset):
@@ -43,7 +44,6 @@ class MDTLUNADataset(Dataset):
         if self.n_slices==1:
             img = pyd.read_file(path).pixel_array
             img = mut.intensity_window(img, low=-1024, high=400)
-            img = mut.resize(img, (288, 288))
             img = mut.norm01(img)
 
 
@@ -56,10 +56,12 @@ class MDTLUNADataset(Dataset):
 
             dicom_names = reader.GetGDCMSeriesFileNames(os.path.dirname(path))
             idx_slice = dicom_names.index(path)
-            dicom_names = dicom_names[idx_slice - round(self.n_slices/2): idx_slice + round(self.n_slices/2)+1]
+            dicom_names = dicom_names[idx_slice - math.floor(self.n_slices/2): idx_slice + math.ceil(self.n_slices/2)]
             reader.SetFileNames(dicom_names)
             image = reader.Execute()
             img = sitk.GetArrayFromImage(image)
+            img = mut.intensity_window(img, low=-1024, high=400)
+            img = mut.norm01(img)
 
             return img
 
@@ -92,7 +94,7 @@ class MDTLUNADataset(Dataset):
 
         batch = dict()
         batch['data'] = img
-        batch['roi_labels'] = [elem.label]
+        batch['roi_labels'] = np.array([elem.label])
         batch['bb_target'] = self.load_annotation(elem)
         batch['scanner'] =  elem.res
         batch['img'] = elem.image
