@@ -678,7 +678,6 @@ def compute_class_loss(anchor_matches, class_pred_logits, shem_poolsize=20):
     """
     # Positive and Negative anchors contribute to the loss,
     # but neutral anchors (match value = 0) don't.
-    print(anchor_matches)
     pos_indices = torch.nonzero(anchor_matches > 0)
     neg_indices = torch.nonzero(anchor_matches == -1)
 
@@ -718,18 +717,15 @@ def compute_bbox_loss(target_deltas, pred_deltas, anchor_matches):
     :param anchor_matches: (n_anchors). [-1, 0, class_id] for negative, neutral, and positive matched anchors.
     :return: loss: torch 1D tensor.
     """
-    print(len(anchor_matches), torch.nonzero(anchor_matches > 0).size())
     if 0 not in torch.nonzero(anchor_matches > 0).size():
 
         indices = torch.nonzero(anchor_matches > 0).squeeze(1)
-        print(indices)
         # Pick bbox deltas that contribute to the loss
         pred_deltas = pred_deltas[indices]
         # Trim target bounding box deltas to the same length as pred_deltas.
         target_deltas = target_deltas[:pred_deltas.size()[0], :]
         # Smooth L1 loss
         loss = F.smooth_l1_loss(pred_deltas, target_deltas)
-        print(pred_deltas, target_deltas, loss.item())
     else:
         loss = torch.FloatTensor([0]).cuda()
 
