@@ -81,10 +81,10 @@ class MDTLUNADataset(Dataset):
         y2 = y+int(diameter/spacing)
 
         box = np.zeros((1, 4))
-        box[0, 0] = x
-        box[0, 1] = y
-        box[0, 2] = x2
-        box[0, 3] = y2
+        box[0, 0] = y
+        box[0, 1] = x
+        box[0, 2] = y2
+        box[0, 3] = x2
 
         return box
 

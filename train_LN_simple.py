@@ -8,7 +8,7 @@ import numpy as np
 import models.MDTRetinaNet as mdtr
 
 
-def train_loop(ds_path, ds_split, savepath, lr=1e-4, scheduler_steps=10, n_slices=1, epochs=50):
+def train_loop(ds_path, ds_split, savepath, lr=1e-4, scheduler_steps=10, n_slices=1, epochs=50, batch_size=4):
     device = torch.device('cuda')
     cf = mdtr.config(n_slices=n_slices)
     logger = logging.getLogger('medicaldetectiontoolkit')
@@ -18,7 +18,7 @@ def train_loop(ds_path, ds_split, savepath, lr=1e-4, scheduler_steps=10, n_slice
     model.to(device)
 
     ds = MDTLUNADataset(ds_path, split=ds_split, n_slices=n_slices)
-    dl = DataLoader(ds, batch_size=4, num_workers=4, shuffle=True)
+    dl = DataLoader(ds, batch_size=batch_size, num_workers=4, shuffle=True)
     optimizer = optim.Adam(model.parameters(), lr=lr)
     if scheduler_steps is not None:
         scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=scheduler_steps, gamma=0.1)
@@ -45,5 +45,5 @@ def train_loop(ds_path, ds_split, savepath, lr=1e-4, scheduler_steps=10, n_slice
               running_box_loss / len(dl))
         if scheduler is not None:
             scheduler.step()
-
-    torch.save(model.state_dict(), savepath)
+    if savepath is not None:
+        torch.save(model.state_dict(), savepath)
