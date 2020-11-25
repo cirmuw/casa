@@ -8,9 +8,9 @@ import numpy as np
 import models.MDTRetinaNet as mdtr
 
 
-def train_loop(ds_path, ds_split, savepath, lr=1e-4, scheduler_steps=10, n_slices=1, epochs=50, batch_size=4, labelDebug=None):
+def train_loop(ds_path, ds_split, savepath, lr=1e-4, scheduler_steps=10, n_slices=1, epochs=50, batch_size=4, labelDebug=None, operate_stride1=False):
     device = torch.device('cuda')
-    cf = mdtr.config(n_slices=n_slices)
+    cf = mdtr.config(n_slices=n_slices, operate_stride1=operate_stride1)
     logger = logging.getLogger('medicaldetectiontoolkit')
     logger.setLevel(logging.DEBUG)
     model = mdtr.net(cf, logger)

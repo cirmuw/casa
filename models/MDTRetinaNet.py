@@ -10,7 +10,7 @@ from nms import nms
 #File: retina_net.py
 
 class config():
-    def __init__(self, dim=2, n_slices=1):
+    def __init__(self, dim=2, n_slices=1, operate_stride1=False):
         self.dim = dim # or 3
         self.patch_size_2D = [512, 512]
         self.patch_size_3D = [128, 128, 64] #TODO fill in!
@@ -18,12 +18,13 @@ class config():
         self.head_classes = 2
         self.start_filts = 48 if self.dim == 2 else 18
         self.end_filts = self.start_filts * 4 if self.dim == 2 else self.start_filts * 2
-        self.n_rpn_features = 512 if self.dim == 2 else 64
+        self.n_rpn_features = 256 if self.dim == 2 else 64
         self.rpn_anchor_ratios = [0.5, 1, 2]
         self.rpn_anchor_stride = 1
         self.n_anchors_per_pos = len(self.rpn_anchor_ratios) #* 3
         self.relu = 'relu' #alternativ: leaky_relu
         self.pre_nms_limit = 10000 if self.dim == 2 else 50000
+        self.operate_stride1 = operate_stride1
 
         self.rpn_bbox_std_dev = np.array([0.1, 0.1, 0.1, 0.2, 0.2, 0.2])
         self.bbox_std_dev = np.array([0.1, 0.1, 0.1, 0.2, 0.2, 0.2])
@@ -40,6 +41,11 @@ class config():
         self.detection_nms_threshold = 1e-5  # needs to be > 0, otherwise all predictions are one cluster.
         self.model_min_confidence = 0.1
         self.rpn_anchor_scales = {'xy': [[8], [16], [32], [64]], 'z': [[2], [4], [8], [16]]}
+
+        self.rpn_anchor_scales['xy'] = [[ii[0], ii[0] * (2 ** (1 / 3)), ii[0] * (2 ** (2 / 3))] for ii in
+                                        self.rpn_anchor_scales['xy']]
+        self.rpn_anchor_scales['z'] = [[ii[0], ii[0] * (2 ** (1 / 3)), ii[0] * (2 ** (2 / 3))] for ii in
+                                       self.rpn_anchor_scales['z']]
         self.backbone_strides = {'xy': [4, 8, 16, 32], 'z': [1, 2, 4, 8]}
         self.pyramid_levels = [0, 1, 2, 3]
 
@@ -53,7 +59,7 @@ class config():
         self.rpn_train_anchors_per_image = 6  #per batch element
         self.train_rois_per_image = 6 #per batch element
         self.roi_positive_ratio = 0.5
-        self.anchor_matching_iou = 0.7
+        self.anchor_matching_iou = 0.5
 
 
 ############################################################
@@ -319,7 +325,7 @@ class FPN(nn.Module):
         self.n_blocks = [3, 4, 6, 3]
         self.block = ResBlock
         self.block_expansion = 4
-        self.operate_stride1 = False
+        self.operate_stride1 = cf.operate_stride1
         self.sixth_pooling = False#cf.sixth_pooling
         self.dim = conv.dim
 
@@ -672,6 +678,7 @@ def compute_class_loss(anchor_matches, class_pred_logits, shem_poolsize=20):
     """
     # Positive and Negative anchors contribute to the loss,
     # but neutral anchors (match value = 0) don't.
+    print(anchor_matches)
     pos_indices = torch.nonzero(anchor_matches > 0)
     neg_indices = torch.nonzero(anchor_matches == -1)
 
@@ -711,15 +718,18 @@ def compute_bbox_loss(target_deltas, pred_deltas, anchor_matches):
     :param anchor_matches: (n_anchors). [-1, 0, class_id] for negative, neutral, and positive matched anchors.
     :return: loss: torch 1D tensor.
     """
+    print(len(anchor_matches), torch.nonzero(anchor_matches > 0).size())
     if 0 not in torch.nonzero(anchor_matches > 0).size():
 
         indices = torch.nonzero(anchor_matches > 0).squeeze(1)
+        print(indices)
         # Pick bbox deltas that contribute to the loss
         pred_deltas = pred_deltas[indices]
         # Trim target bounding box deltas to the same length as pred_deltas.
         target_deltas = target_deltas[:pred_deltas.size()[0], :]
         # Smooth L1 loss
         loss = F.smooth_l1_loss(pred_deltas, target_deltas)
+        print(pred_deltas, target_deltas, loss.item())
     else:
         loss = torch.FloatTensor([0]).cuda()
 
