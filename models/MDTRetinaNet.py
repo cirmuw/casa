@@ -21,9 +21,9 @@ class config():
         self.n_rpn_features = 256 if self.dim == 2 else 64
         self.rpn_anchor_ratios = [0.5, 1, 2]
         self.rpn_anchor_stride = 1
-        self.n_anchors_per_pos = len(self.rpn_anchor_ratios) #* 3
+        self.n_anchors_per_pos = len(self.rpn_anchor_ratios) * 3
         self.relu = 'relu' #alternativ: leaky_relu
-        self.pre_nms_limit = 10000 if self.dim == 2 else 50000
+        self.pre_nms_limit = 3000 if self.dim == 2 else 6000
         self.operate_stride1 = operate_stride1
 
         self.rpn_bbox_std_dev = np.array([0.1, 0.1, 0.1, 0.2, 0.2, 0.2])
@@ -46,6 +46,8 @@ class config():
                                         self.rpn_anchor_scales['xy']]
         self.rpn_anchor_scales['z'] = [[ii[0], ii[0] * (2 ** (1 / 3)), ii[0] * (2 ** (2 / 3))] for ii in
                                        self.rpn_anchor_scales['z']]
+
+        print(self.rpn_anchor_scales)
         self.backbone_strides = {'xy': [4, 8, 16, 32], 'z': [1, 2, 4, 8]}
         self.pyramid_levels = [0, 1, 2, 3]
 
@@ -59,7 +61,7 @@ class config():
         self.rpn_train_anchors_per_image = 6  #per batch element
         self.train_rois_per_image = 6 #per batch element
         self.roi_positive_ratio = 0.5
-        self.anchor_matching_iou = 0.5
+        self.anchor_matching_iou = 0.7
 
 
 ############################################################
@@ -923,7 +925,10 @@ def generate_pyramid_anchors(logger, cf):
                                         feature_strides['xy'][level], anchor_stride))
         logger.info("level {}: built anchors {} / expected anchors {} ||| total build {} / total expected {}".format(
             level, anchors[-1].shape, expected_anchors[lix], np.concatenate(anchors).shape, np.sum(expected_anchors)))
-        
+
+        print("level {}: built anchors {} / expected anchors {} ||| total build {} / total expected {}".format(
+            level, anchors[-1].shape, expected_anchors[lix], np.concatenate(anchors).shape, np.sum(expected_anchors)))
+
     out_anchors = np.concatenate(anchors, axis=0)
     return out_anchors
 
@@ -1022,7 +1027,8 @@ def gt_anchor_matching(cf, anchors, gt_boxes, gt_class_ids=None):
 
     # 3. Set anchors with high overlap as positive.
     above_trhesh_ixs = np.argwhere(anchor_iou_max >= anchor_matching_iou)
-    anchor_class_matches[above_trhesh_ixs] = gt_class_ids[anchor_iou_argmax[above_trhesh_ixs]]
+    for i in above_trhesh_ixs:
+        anchor_class_matches[i] = gt_class_ids[anchor_iou_argmax[i]]
 
     # Subsample to balance positive anchors.
     ids = np.where(anchor_class_matches > 0)[0]
