@@ -38,7 +38,6 @@ class config():
             self.scale = self.scale[:4]
 
         self.model_max_instances_per_batch_element = 10  # per batch element and class.
-        self.detection_nms_threshold = 1e-5  # needs to be > 0, otherwise all predictions are one cluster.
         self.model_min_confidence = 0.1
         self.rpn_anchor_scales = {'xy': [[8], [16], [32], [64]], 'z': [[2], [4], [8], [16]]}
 
@@ -47,7 +46,6 @@ class config():
         self.rpn_anchor_scales['z'] = [[ii[0], ii[0] * (2 ** (1 / 3)), ii[0] * (2 ** (2 / 3))] for ii in
                                        self.rpn_anchor_scales['z']]
 
-        print(self.rpn_anchor_scales)
         self.backbone_strides = {'xy': [4, 8, 16, 32], 'z': [1, 2, 4, 8]}
         self.pyramid_levels = [0, 1, 2, 3]
 
@@ -57,11 +55,14 @@ class config():
              for stride in self.backbone_strides['xy']])
         
         self.n_channels = n_slices #can be set to 3 to include prev and succ slice
-        self.norm = 'batch_norm'
-        self.rpn_train_anchors_per_image = 6  #per batch element
+        self.norm = None
+        self.rpn_train_anchors_per_image = 10  #per batch element
         self.train_rois_per_image = 6 #per batch element
         self.roi_positive_ratio = 0.5
         self.anchor_matching_iou = 0.7
+
+        self.detection_nms_threshold = 0.2  # needs to be > 0, otherwise all predictions are one cluster.
+
 
 
 ############################################################
@@ -209,10 +210,8 @@ def refine_detections(anchors, probs, deltas, batch_ixs, cf):
             ix_scores = bix_scores[ixs]
             ix_scores, order = ix_scores.sort(descending=True)
             ix_rois = ix_rois[order, :]
-
-            xywh = [[ab[0], ab[1], ab[2] - ab[0], ab[3] - ab[1]] for ab in ix_rois.cpu().detach().numpy()]
-            class_keep = nms.boxes(xywh, ix_scores.cpu().detach().numpy(), nms_threshold=0.5)
-
+            xywh = [[ab[1], ab[0], ab[3] - ab[1], ab[2] - ab[0]] for ab in ix_rois.cpu().detach().numpy()]
+            class_keep = nms.boxes(xywh, ix_scores.cpu().detach().numpy(), nms_threshold=cf.detection_nms_threshold)
             #if cf.dim == 2:
             #    class_keep = nms_2D(torch.cat((ix_rois, ix_scores.unsqueeze(1)), dim=1), cf.detection_nms_threshold)
             #else:
@@ -575,6 +574,8 @@ class net(nn.Module):
                 anchor_class_match, anchor_target_deltas = gt_anchor_matching(
                     self.cf, self.np_anchors, gt_boxes[b], gt_class_ids[b])
 
+                #print('positive anchors', np.nonzero(anchor_class_match > 0))
+
                 # add positive anchors used for loss to results_dict for monitoring.
                 pos_anchors = clip_boxes_numpy(
                     self.np_anchors[np.argwhere(anchor_class_match > 0)][:, 0], img.shape[2:])
@@ -601,7 +602,7 @@ class net(nn.Module):
             batch_bbox_loss += bbox_loss / img.shape[0]
 
         results_dict = get_results(self.cf, img.shape, detections, seg_logits, box_results_list)
-        loss = batch_class_loss + batch_bbox_loss
+        loss = batch_bbox_loss + batch_class_loss
         results_dict['torch_loss'] = loss
         results_dict['monitor_values'] = {'loss': loss.item(), 'class_loss': batch_class_loss.item(), 'box_loss': batch_bbox_loss.item()}
         results_dict['logger_string'] = "loss: {0:.2f}, class: {1:.2f}, bbox: {2:.2f}"\
@@ -720,7 +721,6 @@ def compute_bbox_loss(target_deltas, pred_deltas, anchor_matches):
     :return: loss: torch 1D tensor.
     """
     if 0 not in torch.nonzero(anchor_matches > 0).size():
-
         indices = torch.nonzero(anchor_matches > 0).squeeze(1)
         # Pick bbox deltas that contribute to the loss
         pred_deltas = pred_deltas[indices]

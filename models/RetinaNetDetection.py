@@ -97,7 +97,6 @@ class FocalLoss(nn.Module):
                 continue
 
             IoU = calc_iou(anchors[0, :, :], bbox_annotation[:, :4])  # num_anchors x num_annotations
-            print(IoU.shape)
             IoU_max, IoU_argmax = torch.max(IoU, dim=1)  # num_anchors x 1
 
             # import pdb
@@ -105,13 +104,12 @@ class FocalLoss(nn.Module):
 
             # compute the loss for classification
             targets = torch.ones(classification.shape) * -1
-            print(IoU_max.shape, targets.shape)
             if torch.cuda.is_available() and cuda:
                 targets = targets.cuda()
 
             targets[torch.lt(IoU_max, 0.4), :] = 0
 
-            positive_indices = torch.ge(IoU_max, 0.5)
+            positive_indices = torch.ge(IoU_max, 0.5) #original 0.5
 
             num_positive_anchors = positive_indices.sum()
 
@@ -142,7 +140,6 @@ class FocalLoss(nn.Module):
             classification_losses.append(cls_loss.sum() / torch.clamp(num_positive_anchors.float(), min=1.0))
 
             # compute the loss for regression
-
             if positive_indices.sum() > 0:
                 assigned_annotations = assigned_annotations[positive_indices, :]
 
@@ -198,11 +195,11 @@ class Anchors(nn.Module):
         super(Anchors, self).__init__()
 
         if pyramid_levels is None:
-            self.pyramid_levels = [2, 3, 4, 5, 6]
+            self.pyramid_levels = [3, 4, 5, 6, 7]
         if strides is None:
             self.strides = [2 ** x for x in self.pyramid_levels]
         if sizes is None:
-            self.sizes = [2 ** (x + 2) for x in self.pyramid_levels]
+            self.sizes = [2 ** (x+2) for x in self.pyramid_levels]
         if ratios is None:
             self.ratios = np.array([0.5, 1, 2])
         if scales is None:
@@ -600,7 +597,7 @@ class ResNet(nn.Module):
     def __init__(self, num_classes, block, layers):
         self.inplanes = 64
         super(ResNet, self).__init__()
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        self.conv1 = nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
@@ -650,7 +647,6 @@ class ResNet(nn.Module):
         self.freeze_bn()
 
     def _make_layer(self, block, planes, blocks, stride=1):
-        downsample = None
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(

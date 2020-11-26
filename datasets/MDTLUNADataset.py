@@ -8,7 +8,7 @@ import nibabel as nib
 import torch
 import pydicom as pyd
 import math
-
+import random
 
 class MDTLUNADataset(Dataset):
 
@@ -43,7 +43,7 @@ class MDTLUNADataset(Dataset):
         return len(self.df)
 
 
-    def load_image(self, path, channels=1):
+    def load_image(self, path, channels=1, shiftx_aug=0, shifty_aug=0):
         if self.n_slices==1:
             img = pyd.read_file(path).pixel_array
 
@@ -55,9 +55,9 @@ class MDTLUNADataset(Dataset):
                 h = img.shape[1]
                 s2 = int((h - self.cropped_to[1]) / 2)
                 e2 = int(s2 + self.cropped_to[1])
-                img = img[s1:e1, s2:e2]
+                img = img[s1 + shiftx_aug:e1 + shiftx_aug, s2 + shifty_aug:e2 + shifty_aug]
 
-            img = mut.intensity_window(img, low=-1024, high=600)
+            img = mut.intensity_window(img, low=-1024, high=800)
             img = mut.norm01(img)
 
             if channels==3:
@@ -79,7 +79,7 @@ class MDTLUNADataset(Dataset):
             return img
 
 
-    def load_annotation(self, elem):
+    def load_annotation(self, elem, shiftx_aug=0, shifty_aug=0):
         dcm = pyd.read_file(elem.image)
 
         x = elem.coordX
@@ -88,6 +88,10 @@ class MDTLUNADataset(Dataset):
         if self.cropped_to is not None:
             x -= (dcm.Rows-self.cropped_to[0])/2
             y -= (dcm.Columns-self.cropped_to[1])/2
+
+
+        x -= shifty_aug
+        y -= shiftx_aug
 
         diameter = elem.diameter_mm
         spacing = float(dcm.PixelSpacing[0])
@@ -108,12 +112,17 @@ class MDTLUNADataset(Dataset):
 
     def __getitem__(self, index):
         elem = self.df.iloc[index]
-        img = self.load_image(elem.image)
+
+        shiftx_aug = random.randint(-50, 50)
+        shifty_aug = random.randint(-50, 50)
+
+        img = self.load_image(elem.image, shiftx_aug=shiftx_aug, shifty_aug=shifty_aug)
+
 
         batch = dict()
         batch['data'] = img
         batch['roi_labels'] = np.array([elem.label])
-        batch['bb_target'] = self.load_annotation(elem)
+        batch['bb_target'] = self.load_annotation(elem, shiftx_aug=shiftx_aug, shifty_aug=shifty_aug)
         batch['scanner'] =  elem.res
         batch['img'] = elem.image
 
