@@ -12,7 +12,7 @@ from nms import nms
 class config():
     def __init__(self, dim=2, n_slices=1, operate_stride1=False):
         self.dim = dim # or 3
-        self.patch_size_2D = [512, 512]
+        self.patch_size_2D = [288, 288]
         self.patch_size_3D = [128, 128, 64] #TODO fill in!
         self.patch_size = self.patch_size_2D if self.dim == 2 else self.patch_size_3D
         self.head_classes = 2

@@ -10,33 +10,56 @@ import pydicom as pyd
 import math
 
 
-class MDTLUNADataset(Dataset):
+class MDTLUNADatasetContinuous(Dataset):
 
-    def __init__(self, datasetfile, split=['train'], iterations=None,
-                 batch_size=None, res=None, labelDebug=None, n_slices=1, cropped_to=(288, 288)):
+    def __init__(self, datasetfile, transition_phase_after=.8, order=['ges', 'geb', 'sie'], n_slices=1, seed=None):
         df = pd.read_csv(datasetfile, index_col=0)
-        if type(split) is list:
-            selection = np.any([df.split==x for x in split], axis=0)
-        else:
-            selection = df.split==split
+        assert (set(['train']).issubset(df.split.unique()))
 
-        self.df = df.loc[selection]
-        self.df = self.df.reset_index()
+        np.random.seed(seed)
 
-        if res is not None:
-            self.df = self.df.loc[self.df.res==res]
-            #self.df = self.df.reset_index()
+        res_dfs = list()
+        for r in order:
+            res_df = df.loc[df.res == r]
+            res_df = res_df.loc[res_df.split == 'train']
+            res_df = res_df.sample(frac=1, random_state=seed)
 
-        if labelDebug is not None:
-            self.df = self.df.loc[self.df.label==labelDebug]
+            res_dfs.append(res_df.reset_index(drop=True))
 
-        if iterations is not None:
-            self.df = self.df.sample(iterations*batch_size, replace=True)
-            self.df = self.df.reset_index(drop=True)
+        combds = None
+        new_idx = 0
+
+        for j in range(len(res_dfs) - 1):
+            old = res_dfs[j]
+            new = res_dfs[j + 1]
+
+            old_end = int((len(old) - new_idx) * transition_phase_after) + new_idx
+            if combds is None:
+                combds = old.iloc[:old_end]
+            else:
+                combds = combds.append(old.iloc[new_idx + 1:old_end])
+
+            old_idx = old_end
+            old_max = len(old) - 1
+            new_idx = 0
+            i = 0
+
+            while old_idx <= old_max and (i / ((old_max - old_end) * 2) < 1):
+                take_newclass = np.random.binomial(1, min(i / ((old_max - old_end) * 2), 1))
+                if take_newclass:
+                    combds = combds.append(new.iloc[new_idx])
+                    new_idx += 1
+                else:
+                    combds = combds.append(old.iloc[old_idx])
+                    old_idx += 1
+                i += 1
+            combds = combds.append(old.iloc[old_idx:])
+
+        combds = combds.append(new.iloc[new_idx:])
+        combds.reset_index(inplace=True, drop=True)
+        self.df = combds
 
         self.n_slices = n_slices
-
-        self.cropped_to = cropped_to
 
 
     def __len__(self):
@@ -46,19 +69,9 @@ class MDTLUNADataset(Dataset):
     def load_image(self, path, channels=1):
         if self.n_slices==1:
             img = pyd.read_file(path).pixel_array
-
-            if self.cropped_to is not None:
-                w = img.shape[0]
-                s1 = int((w-self.cropped_to[0])/2)
-                e1 = int(s1 + self.cropped_to[0])
-
-                h = img.shape[1]
-                s2 = int((h - self.cropped_to[1]) / 2)
-                e2 = int(s2 + self.cropped_to[1])
-                img = img[s1:e1, s2:e2]
-
-            img = mut.intensity_window(img, low=-1024, high=600)
+            img = mut.intensity_window(img, low=-1024, high=400)
             img = mut.norm01(img)
+
 
             if channels==3:
                 return np.tile(img, [3, 1, 1])
@@ -81,13 +94,8 @@ class MDTLUNADataset(Dataset):
 
     def load_annotation(self, elem):
         dcm = pyd.read_file(elem.image)
-
         x = elem.coordX
         y = elem.coordY
-
-        if self.cropped_to is not None:
-            x -= (dcm.Rows-self.cropped_to[0])/2
-            y -= (dcm.Columns-self.cropped_to[1])/2
 
         diameter = elem.diameter_mm
         spacing = float(dcm.PixelSpacing[0])

@@ -7,6 +7,7 @@ import skimage
 import sklearn
 from pprint import pprint
 import numpy as np
+import models.MDTRetinaNet as mdtr
 
 import pandas as pd
 import pytorch_lightning as pl
@@ -21,8 +22,8 @@ import models.RetinaNetDetection as retinanet
 from sklearn.ensemble import IsolationForest
 from sklearn.random_projection import SparseRandomProjection
 
-from datasets.LUNADatasetContinuous import LUNADatasetContinuous
-from datasets.LUNADataset import LUNADataset
+from datasets.MDTLUNADatasetContinuous import MDTLUNADatasetContinuous
+from datasets.MDTLUNADataset import MDTLUNADataset
 
 from sklearn.metrics import mean_absolute_error
 
@@ -68,7 +69,12 @@ class FastGramDynamicMemoryLungNodule(pl.LightningModule):
 
         #init task model
         print('init task model')
-        self.model = retinanet.resnet18() #TODO: try different resnets for baseline
+        modelcf = mdtr.config(n_slices=self.hparams.n_slices)
+
+        modellogger = logging.getLogger('medicaldetectiontoolkit')
+        modellogger.setLevel(logging.DEBUG)
+        self.model = mdtr.net(modelcf, modellogger)
+
         if not self.hparams.base_model is None:
             print('read base model')
             state_dict =  torch.load(os.path.join(utils.TRAINED_MODELS_FOLDER, self.hparams.base_model))
@@ -138,11 +144,12 @@ class FastGramDynamicMemoryLungNodule(pl.LightningModule):
         hparams['scanner'] = None
         hparams['startbudget'] = 0.0
         hparams['len_perf_queue'] = 5
+        hparams['n_slices'] = 1
 
         return hparams
 
     def getmemoryitems_from_base(self, num_items=128):
-        dl = DataLoader(LUNADataset(self.hparams.datasetfile,
+        dl = DataLoader(MDTLUNADataset(self.hparams.datasetfile,
                                    iterations=None,
                                    batch_size=self.hparams.batch_size,
                                    split=['base_train']),
@@ -347,12 +354,12 @@ class FastGramDynamicMemoryLungNodule(pl.LightningModule):
     #@pl.data_loader
     def train_dataloader(self):
         if self.hparams.continuous:
-            return DataLoader(LUNADatasetContinuous(self.hparams.datasetfile,
+            return DataLoader(MDTLUNADatasetContinuous(self.hparams.datasetfile,
                                                                transition_phase_after=self.hparams.transition_phase_after,
                                                                 seed=self.hparams.seed),
                               batch_size=self.hparams.batch_size, num_workers=4, drop_last=True, pin_memory=False)
         else:
-            return DataLoader(LUNADataset(self.hparams.datasetfile,
+            return DataLoader(MDTLUNADataset(self.hparams.datasetfile,
                                               iterations=self.hparams.noncontinuous_steps,
                                               batch_size=self.hparams.batch_size,
                                               split=self.hparams.noncontinuous_train_splits,
@@ -363,7 +370,7 @@ class FastGramDynamicMemoryLungNodule(pl.LightningModule):
 
     #@pl.data_loader
     def val_dataloader(self):
-        return DataLoader(LUNADataset(self.hparams.datasetfile,
+        return DataLoader(MDTLUNADataset(self.hparams.datasetfile,
                                           split='val'),
                           batch_size=4,
                           num_workers=2, pin_memory=False, drop_last=False)

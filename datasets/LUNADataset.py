@@ -76,5 +76,4 @@ class LUNADataset(Dataset):
         img = self.load_image(elem.image)
         annotation = self.load_annotation(elem)
 
-
         return img, annotation, elem.image, elem.res

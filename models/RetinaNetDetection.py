@@ -97,7 +97,7 @@ class FocalLoss(nn.Module):
                 continue
 
             IoU = calc_iou(anchors[0, :, :], bbox_annotation[:, :4])  # num_anchors x num_annotations
-
+            print(IoU.shape)
             IoU_max, IoU_argmax = torch.max(IoU, dim=1)  # num_anchors x 1
 
             # import pdb
@@ -105,7 +105,7 @@ class FocalLoss(nn.Module):
 
             # compute the loss for classification
             targets = torch.ones(classification.shape) * -1
-
+            print(IoU_max.shape, targets.shape)
             if torch.cuda.is_available() and cuda:
                 targets = targets.cuda()
 
