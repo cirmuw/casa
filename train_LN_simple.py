@@ -53,7 +53,7 @@ def train_loop(ds_path, ds_split, savepath, lr=1e-4, scheduler_steps=10, n_slice
     if savepath is not None:
         torch.save(model.state_dict(), savepath)
 
-def train_loop_simple(ds_path, ds_split, savepath, lr=1e-4, scheduler_steps=10, n_slices=1, epochs=50, batch_size=4,
+def train_loop_simple(ds_path, ds_split, savepath, lr=1e-4, scheduler_steps=10, epochs=50, batch_size=4,
                labelDebug=None, operate_stride1=False):
     device = torch.device('cuda')
 
