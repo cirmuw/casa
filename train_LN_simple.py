@@ -62,7 +62,7 @@ def train_loop_simple(ds_path, ds_split, savepath, lr=1e-4, scheduler_steps=10, 
 
     model.to(device)
 
-    ds = LUNADataset(ds_path, split=ds_split, labelDebug=labelDebug)
+    ds = LUNADataset(ds_path, split=ds_split, labelDebug=labelDebug, cropped_to=(288, 288))
     dl = DataLoader(ds, batch_size=batch_size, num_workers=4, shuffle=True)
     optimizer = optim.Adam(model.parameters(), lr=lr)
     if scheduler_steps is not None:
@@ -93,7 +93,7 @@ def train_loop_simple(ds_path, ds_split, savepath, lr=1e-4, scheduler_steps=10, 
             running_class += classification_loss.item()
             running_regress += regression_loss.item()
 
-        print(epoch, 'loss:', running_loss / len(dl), 'class:', running_regress / len(dl), 'box:',
+        print(epoch, 'loss:', running_loss / len(dl), 'class:', running_class / len(dl), 'box:',
               running_regress / len(dl))
         if scheduler is not None:
             scheduler.step()

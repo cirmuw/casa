@@ -36,8 +36,6 @@ class LUNADataset(Dataset):
 
         self.cropped_to = cropped_to
 
-
-
     def __len__(self):
         return len(self.df)
 
