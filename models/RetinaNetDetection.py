@@ -199,11 +199,11 @@ class Anchors(nn.Module):
         if strides is None:
             self.strides = [2 ** x for x in self.pyramid_levels]
         if sizes is None:
-            self.sizes = [2 ** x for x in self.pyramid_levels]
+            self.sizes = [2 ** (x-1) for x in self.pyramid_levels]
         if ratios is None:
             self.ratios = np.array([0.5, 1, 2])
         if scales is None:
-            self.scales = np.array([2 ** 0, 2 ** (1.0 / 3.0), 2 ** (2.0 / 3.0)])
+            self.scales = np.array([2 ** 0, 2 ** (1.0 / 4.0), 2 ** (2.0 / 4.0)])
 
     def forward(self, image, cuda=True):
 
