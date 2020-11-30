@@ -22,7 +22,7 @@ class config():
         self.rpn_anchor_ratios = [0.5, 1, 2]
         self.rpn_anchor_stride = 1
         self.n_anchors_per_pos = len(self.rpn_anchor_ratios) * 3
-        self.relu = 'relu' #alternativ: leaky_relu
+        self.relu = 'leaky_relu' #alternativ: leaky_relu
         self.pre_nms_limit = 3000 if self.dim == 2 else 6000
         self.operate_stride1 = operate_stride1
 
@@ -59,7 +59,7 @@ class config():
         self.rpn_train_anchors_per_image = 10  #per batch element
         self.train_rois_per_image = 6 #per batch element
         self.roi_positive_ratio = 0.5
-        self.anchor_matching_iou = 0.7
+        self.anchor_matching_iou = 0.5
 
         self.detection_nms_threshold = 0.2  # needs to be > 0, otherwise all predictions are one cluster.
 
