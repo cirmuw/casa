@@ -55,8 +55,8 @@ class LUNADataset(Dataset):
         img = mut.intensity_window(img, low=-1024, high=800)
         img = mut.norm01(img)
 
-        return img[None, :, :]
-        #return np.tile(img, [3, 1, 1])
+        #return img[None, :, :]
+        return np.tile(img, [3, 1, 1])
 
 
     def load_annotation(self, elem, shiftx_aug=0, shifty_aug=0):
@@ -78,14 +78,11 @@ class LUNADataset(Dataset):
         y2 = y+int(diameter/spacing)
 
         box = np.zeros((1, 5))
-        box[0, 0] = y
-        box[0, 1] = x
-        box[0, 2] = y2
-        box[0, 3] = x2
-        if diameter>0:
-            box[0, 4] = 1
-        else:
-            box[0, 4] = 0
+        box[0, 0] = x
+        box[0, 1] = y
+        box[0, 2] = x2
+        box[0, 3] = y2
+        box[0, 4] = elem.bin_malignancy
 
         return box
 
