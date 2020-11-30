@@ -121,7 +121,7 @@ class MDTLUNADataset(Dataset):
 
         batch = dict()
         batch['data'] = img
-        batch['roi_labels'] = np.array([elem.label])
+        batch['roi_labels'] = np.array([elem.bin_malignancy])
         batch['bb_target'] = self.load_annotation(elem, shiftx_aug=shiftx_aug, shifty_aug=shifty_aug)
         batch['scanner'] =  elem.res
         batch['img'] = elem.image
