@@ -165,10 +165,10 @@ class FocalLoss(nn.Module):
                 targets = torch.stack((targets_dx, targets_dy, targets_dw, targets_dh))
                 targets = targets.t()
 
-                #if torch.cuda.is_available() and cuda:
-                #    targets = targets / torch.Tensor([[0.1, 0.1, 0.2, 0.2]]).cuda()
-                #else:
-                #    targets = targets / torch.Tensor([[0.1, 0.1, 0.2, 0.2]])
+                if torch.cuda.is_available() and cuda:
+                    targets = targets / torch.Tensor([[0.1, 0.1, 0.2, 0.2]]).cuda()
+                else:
+                    targets = targets / torch.Tensor([[0.1, 0.1, 0.2, 0.2]])
 
                 negative_indices = 1 + (~positive_indices)
 
