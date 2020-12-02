@@ -54,7 +54,7 @@ def train_loop(ds_path, ds_split, savepath, lr=1e-4, scheduler_steps=10, n_slice
         torch.save(model.state_dict(), savepath)
 
 def train_loop_simple(ds_path, ds_split, savepath, lr=1e-4, scheduler_steps=10, epochs=50, batch_size=4,
-               labelDebug=None, operate_stride1=False):
+               labelDebug=None, regression_weight=1.0):
     device = torch.device('cuda')
 
     print('simple model!')
@@ -64,7 +64,7 @@ def train_loop_simple(ds_path, ds_split, savepath, lr=1e-4, scheduler_steps=10, 
 
     ds = LUNADataset(ds_path, split=ds_split, labelDebug=labelDebug, cropped_to=(288, 288))
     dl = DataLoader(ds, batch_size=batch_size, num_workers=4, shuffle=True)
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=0)
     if scheduler_steps is not None:
         scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=scheduler_steps, gamma=0.1)
     else:
@@ -83,7 +83,7 @@ def train_loop_simple(ds_path, ds_split, savepath, lr=1e-4, scheduler_steps=10, 
             classification_loss = classification_loss.mean()
             regression_loss = regression_loss.mean()
 
-            loss = classification_loss + regression_loss
+            loss = classification_loss + (regression_loss*regression_weight)
             loss.backward()
             # torch.nn.utils.clip_grad_norm_(model.parameters(), 0.1)
 
