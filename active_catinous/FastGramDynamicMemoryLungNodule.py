@@ -1,13 +1,8 @@
 import argparse
 import logging
-import math
 import os
 import random
-import skimage
-import sklearn
-from pprint import pprint
 import numpy as np
-import models.MDTRetinaNet as mdtr
 
 import pandas as pd
 import pytorch_lightning as pl
@@ -17,25 +12,27 @@ import torch.nn as nn
 import torch.nn.functional as F
 from pytorch_lightning import Trainer
 from torch.utils.data import DataLoader
-import models.RetinaNetDetection as retinanet
 
 from sklearn.ensemble import IsolationForest
 from sklearn.random_projection import SparseRandomProjection
 
-from datasets.MDTLUNADatasetContinuous import MDTLUNADatasetContinuous
-from datasets.MDTLUNADataset import MDTLUNADataset
+from datasets.LIDCDatasetContinuous import LIDCDatasetContinuous
+from datasets.LIDCDataset import LIDCDataset
 
 from sklearn.metrics import mean_absolute_error
 
 from scipy.spatial.distance import pdist, squareform
 import torchvision.models as tvmodels
+from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 
 from . import utils
 import collections
+import copy
+import pickle
 
 class FastGramDynamicMemoryLungNodule(pl.LightningModule):
 
-    def __init__(self, hparams={}, device=torch.device('cpu'), verbose=True, training=True):
+    def __init__(self, hparams={}, device=torch.device('cpu'), verbose=False, training=True):
         super(FastGramDynamicMemoryLungNodule, self).__init__()
         self.hparams = utils.default_params(self.get_default_hparams(), hparams)
         self.hparams = argparse.Namespace(**self.hparams)
@@ -69,11 +66,11 @@ class FastGramDynamicMemoryLungNodule(pl.LightningModule):
 
         #init task model
         print('init task model')
-        modelcf = mdtr.config(n_slices=self.hparams.n_slices)
-
-        modellogger = logging.getLogger('medicaldetectiontoolkit')
-        modellogger.setLevel(logging.DEBUG)
-        self.model = mdtr.net(modelcf, modellogger)
+        num_classes = 3  # 0=background, 1=begnin, 2=malignant
+        # load a model pre-trained pre-trained on COCO
+        self.model = tvmodels.detection.fasterrcnn_resnet50_fpn(pretrained=True)
+        in_features = self.model.roi_heads.box_predictor.cls_score.in_features
+        self.model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
 
         if not self.hparams.base_model is None:
             print('read base model')
@@ -87,8 +84,8 @@ class FastGramDynamicMemoryLungNodule(pl.LightningModule):
         self.to(device)
 
         if not training:
-            print('only validation, no training model')
-        else:
+            print('only validation, not training the model')
+        elif self.hparams.continuous:
             print('init for training')
             #init style model
             self.stylemodel = tvmodels.resnet50(pretrained=True)
@@ -103,13 +100,11 @@ class FastGramDynamicMemoryLungNodule(pl.LightningModule):
                     self.trainingsmemory = NaiveDynamicMemoryLN(initelements=initmemoryelements,
                                                                 insert_rate=self.hparams.naive_continuous_rate,
                                                                 memorymaximum=self.hparams.memorymaximum,
-                                                                gram_weights=self.hparams.gram_weights,
                                                                 seed=self.hparams.seed)
                 else:
                     print('init CASA memory')
                     self.trainingsmemory = DynamicMemoryLN(initelements=initmemoryelements,
                                                            memorymaximum=self.hparams.memorymaximum,
-                                                           gram_weights=self.hparams.gram_weights,
                                                            seed=self.hparams.seed,
                                                            perf_queue_len=self.hparams.len_perf_queue)
 
@@ -120,7 +115,7 @@ class FastGramDynamicMemoryLungNodule(pl.LightningModule):
     @staticmethod
     def get_default_hparams():
         hparams = dict()
-        hparams['datasetfile'] = '/project/catinous/lunadata/luna_lunacombined_dataset.csv'
+        hparams['datasetfile'] = '/project/catinous/lunadata/luna_lunacombined_dataset_malignancy.csv'
         hparams['batch_size'] = 8
         hparams['training_batch_size'] = 8
         hparams['transition_phase_after'] = 0.8
@@ -144,27 +139,31 @@ class FastGramDynamicMemoryLungNodule(pl.LightningModule):
         hparams['scanner'] = None
         hparams['startbudget'] = 0.0
         hparams['len_perf_queue'] = 5
-        hparams['n_slices'] = 1
+        hparams['iou_threshold'] = 0.2
 
         return hparams
 
     def getmemoryitems_from_base(self, num_items=128):
-        dl = DataLoader(MDTLUNADataset(self.hparams.datasetfile,
+        dl = DataLoader(LIDCDataset(self.hparams.datasetfile,
                                    iterations=None,
                                    batch_size=self.hparams.batch_size,
                                    split=['base_train']),
-                   batch_size=self.hparams.batch_size, num_workers=4, pin_memory=True, shuffle=True)
+                   batch_size=4, num_workers=4, pin_memory=True, shuffle=True,
+                        collate_fn=utils.collate_fn)
 
         memoryitems = []
         for batch in dl:
+            self.grammatrices = []
             torch.cuda.empty_cache()
 
-            x, y, filepath, scanner = batch
-            x = x.to(self.device)
-            y_style = self.stylemodel(x.float())
+            images, targets, scanner, filepath = batch
+            images = torch.stack(images)
+
+            x = images.to(self.device)
+            y_style = self.stylemodel(x)
 
             for i, f in enumerate(filepath):
-                memoryitems.append(MemoryItem(x[i].detach().cpu(), y[i], f, scanner[i],
+                memoryitems.append(MemoryItem(x[i].detach().cpu(), targets[i], f, scanner[i],
                                               current_grammatrix=self.grammatrices[0][i].detach().cpu().numpy().flatten(),
                                               pseudo_domain=0))
 
@@ -172,6 +171,10 @@ class FastGramDynamicMemoryLungNodule(pl.LightningModule):
                 break
 
             self.grammatrices = []
+
+        with open('initimages.pkl', 'wb') as f:
+            pickle.dump(images, f)
+
         return memoryitems[:num_items]
 
 
@@ -189,16 +192,16 @@ class FastGramDynamicMemoryLungNodule(pl.LightningModule):
         self.grammatrices.append(utils.gram_matrix(input[0]))
 
     def training_step(self, batch, batch_idx):
-        x, y, filepath, scanner = batch
+        images, targets, scanner, filepath = batch
 
         self.budget += len(filepath) * self.budgetrate
 
-        if self.hparms.order[1] in scanner and not self.shiftcheckpoint_1:
+        if self.hparams.order[1] in scanner and not self.shiftcheckpoint_1:
             exp_name = utils.get_expname(self.hparams)
             weights_path = utils.TRAINED_MODELS_FOLDER + exp_name + '_shift_1_ckpt.pt'
             torch.save(self.model.state_dict(), weights_path)
             self.shiftcheckpoint_1 = True
-        if self.hparms.order[2] in scanner and not self.shiftcheckpoint_2:
+        if self.hparams.order[2] in scanner and not self.shiftcheckpoint_2:
             exp_name = utils.get_expname(self.hparams)
             weights_path = utils.TRAINED_MODELS_FOLDER + exp_name + '_shift_2_ckpt.pt'
             torch.save(self.model.state_dict(), weights_path)
@@ -206,15 +209,21 @@ class FastGramDynamicMemoryLungNodule(pl.LightningModule):
 
         if not self.naive_continuous and self.hparams.use_memory:
                 torch.cuda.empty_cache()
-                y = y[:, None]
                 self.grammatrices = []
-                y_style = self.stylemodel(x.float())
+                #images = list(image.to(self.device) for image in images)
+                img_tensors = torch.stack(images).to(self.device)
+                y_style = self.stylemodel(img_tensors)
 
                 budget_before = self.budget
 
-                for i, img in enumerate(x):
-                    grammatrix = [bg[i].detach().cpu().numpy().flatten() for bg in self.grammatrices]
-                    new_mi = MemoryItem(img.detach().cpu(), y[i], filepath[i], scanner[i], grammatrix[0])
+                if batch_idx==0:
+                    with open('grammatrices.pkl', 'wb') as f:
+                        pickle.dump(self.grammatrices, f)
+                    with open('batchimages.pkl', 'wb') as f:
+                        pickle.dump(img_tensors, f)
+
+                for i, img in enumerate(images):
+                    new_mi = MemoryItem(img.detach().cpu(), targets[i], filepath[i], scanner[i], self.grammatrices[0][i].detach().cpu().numpy().flatten())
                     self.budget = self.trainingsmemory.insert_element(new_mi, self.budget, self)
 
                 self.budget = self.trainingsmemory.check_outlier_memory(self.budget, self)
@@ -228,152 +237,174 @@ class FastGramDynamicMemoryLungNodule(pl.LightningModule):
                 if not np.all(list(self.trainingsmemory.domaincomplete.values())) and self.budgetchangecounter<10:
                     for k, v in self.trainingsmemory.domaincomplete.items():
                         if not v:
-                            if len(self.trainingsmemory.domainMAE[k])==self.hparams.len_perf_queue:
+                            if len(self.trainingsmemory.domainPerf[k])==self.hparams.len_perf_queue:
                                 meanperf = np.mean(self.trainingsmemory.domainPerf[k])
                                 print('domain', k, meanperf, self.trainingsmemory.domainPerf[k])
-                                if meanperf<self.hparams.completion_limit: #TODO < or > depending on metric
+                                if meanperf>self.hparams.completion_limit: #TODO < or > depending on metric
                                     self.trainingsmemory.domaincomplete[k] = True
+                                    print('domain', k, 'finished')
 
-                    xs, ys = self.trainingsmemory.get_training_batch(self.hparams.batch_size,
-                                                                     batches=int(self.hparams.training_batch_size/self.hparams.batch_size))
+                    images, targets = self.trainingsmemory.get_training_batch(self.hparams.batch_size)
 
-                    loss = None
-                    for i, x in enumerate(xs):
-                        y = ys[i]
+                    images = list(image.to(self.device) for image in images)
+                    targets = [{k: v.to(self.device) for k, v in t.items()} for t in targets]
 
-                        x = x.to(self.device)
-                        y = y.to(self.device)
-
-                        y_hat = self.model(x.float())
-                        if loss is None:
-                            loss = self.loss(y_hat, y.float())
-                        else:
-                            loss += self.loss(y_hat, y.float())
+                    loss_dict = self.forward(images, targets)
+                    losses = sum(loss for loss in loss_dict.values())
 
                     self.train_counter += 1
-                    self.log('train_loss', loss)
-
-                    return loss
+                    self.log_dict(loss_dict)
+                    self.log('train_loss', losses)
+                    return losses
                 else:
                     return None
         elif self.naive_continuous and self.hparams.use_memory:
-            y = y[:, None]
+            torch.cuda.empty_cache()
             self.grammatrices = []
-            y_style = self.stylemodel(x.float())
 
-            for i, img in enumerate(x):
+            images = list(image.to(self.device) for image in images)
+            y_style = self.stylemodel(images)
+
+            for i, img in enumerate(images):
                 grammatrix = [bg[i].detach().cpu().numpy().flatten() for bg in self.grammatrices]
-                new_mi = MemoryItem(img.detach().cpu(), y[i], filepath[i], scanner[i], grammatrix[0])
+                new_mi = MemoryItem(img.detach().cpu(), targets[i], filepath[i], scanner[i], grammatrix[0])
                 self.trainingsmemory.insert_element(new_mi)
 
             if len(self.trainingsmemory.forceitems)!=0:
-                xs, ys = self.trainingsmemory.get_training_batch(self.hparams.batch_size,
-                                                                 batches=int(self.hparams.training_batch_size/self.hparams.batch_size))
+                images, targets = self.trainingsmemory.get_training_batch(self.hparams.batch_size)
 
-                loss = None
-                for i, x in enumerate(xs):
-                    y = ys[i]
+                images = list(image.to(self.device) for image in images)
+                targets = [{k: v.to(self.device) for k, v in t.items()} for t in targets]
 
-                    x = x.to(self.device)
-                    y = y.to(self.device)
-
-                    y_hat = self.model(x.float())
-                    if loss is None:
-                        loss = self.loss(y_hat, y.float())
-                    else:
-                        loss += self.loss(y_hat, y.float())
+                loss_dict = self.forward(images, targets)
+                losses = sum(loss for loss in loss_dict.values())
 
                 self.train_counter += 1
-                self.log('train_loss', loss)
-                return loss
+                self.log_dict(loss_dict)
+                self.log('train_loss', losses)
+                return losses
             else:
                 return None
         else:
-            y_hat = self.forward(x.float())
-            loss = self.loss(y_hat, y[:, None].float())
-            self.log('train_loss', loss)
-            return loss
+            images = list(image.to(self.device) for image in images)
+            targets = [{k: v.to(self.device) for k, v in t.items()} for t in targets]
+            loss_dict = self.forward(images, targets)
+            losses = sum(loss for loss in loss_dict.values())
+
+            self.log_dict(loss_dict)
+            self.log('train_loss', losses)
+            return losses
 
     def validation_step(self, batch, batch_idx):
-        x, y, img, res = batch
-        self.grammatrices = []
+        images, targets, scanner, filepath = batch
+        images = list(image.to(self.device) for image in images[0])
 
-        y_hat = self.forward(x.float())
+        out = self.model(images)
 
-        res = res[0]
-        self.log_dict({f'val_loss_{res}': self.loss(y_hat, y[:, None].float()),
-                       f'val_mae_{res}': self.mae(y_hat, y[:, None].float())})
+        out_boxes = [utils.filter_boxes_area(out[i]['boxes'].cpu().detach().numpy(), out[i]['scores'].cpu().detach().numpy())
+                     for i in range(len(out))]
+        boxes_np = [b[0] for b in out_boxes]
+        scores_np = [b[1] for b in out_boxes]
 
-    def forward(self, x):
-        return self.model(x)
+        final_boxes, final_scores = utils.correct_boxes(boxes_np, scores_np)
 
-    def test_step(self, batch, batch_idx):
-        x, y, img, res = batch
-        self.grammatrices = []
+        gt = targets[0]['boxes'][0]
+        true_pred = 0
+        wrong_pred = 0
+        detected = False
 
-        y_hat = self.forward(x.float())
+        if len(final_boxes) > 0:
+            for i, b in enumerate(final_boxes):
+                if final_scores[i] > 0.5:
+                    if utils.bb_intersection_over_union(gt, b) > self.hparams.iou_threshold:
+                        true_pred += 1
+                        detected = True
+                    else:
+                        wrong_pred += 1
 
-        res = res[0]
-        return {f'val_loss_{res}': self.loss(y_hat, y[:, None].float()),
-                f'val_mae_{res}': self.mae(y_hat, y[:, None].float())}
+        return {'true': true_pred, 'false': wrong_pred, 'detected': detected, 'scanner': scanner[0]}
 
-    def test_end(self, outputs):
-        val_mean = dict()
-        res_count = dict()
+    def validation_epoch_end(self, validation_step_outputs):
+        scanner_tp = dict()
+        scanner_fp = dict()
+        scanner_det = dict()
 
-        for output in outputs:
+        for scanner in self.hparams.order:
+            scanner_tp[scanner] = []
+            scanner_fp[scanner] = []
+            scanner_det[scanner] = []
+        for pred in validation_step_outputs:
+            tp = pred['true']
+            fp = pred['false']
+            det = pred['detected']
+            scanner = pred['scanner']
+            scanner_tp[scanner].append(tp)
+            scanner_fp[scanner].append(fp)
+            scanner_det[scanner].append(det)
 
-            for k in output.keys():
-                if k not in val_mean.keys():
-                    val_mean[k] = 0
-                    res_count[k] = 0
 
-                val_mean[k] += output[k]
-                res_count[k] += 1
+        print(scanner_tp, scanner_fp, scanner_det)
+        for scanner in scanner_tp:
+            true = np.array(scanner_tp[scanner]).sum()
+            false = np.array(scanner_fp[scanner]).sum()
 
-        tensorboard_logs = dict()
-        for k in val_mean.keys():
-            tensorboard_logs[k] = val_mean[k] / res_count[k]
+            print(true/(true+false), np.array(scanner_det[scanner]).sum()/len(scanner_det[scanner]), false/len(scanner_det[scanner]))
+            self.log(f'val_map_{scanner}', true/(true+false))
+            self.log(f'val_mapdet_{scanner}', np.array(scanner_det[scanner]).sum()/len(scanner_det[scanner]))
+            self.log(f'val_fpscan_{scanner}', false/len(scanner_det[scanner]))
 
-        return {'log': tensorboard_logs}
+    def forward(self, x, y):
+        return self.model(x, y)
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=self.learning_rate)
 
+    def check_detection(self, img, target):
+        img = [img.to(self.device)]
 
-    def get_absolute_error(self, image, label):
-        self.eval()
-        x = image
-        x = x[None, :].to(self.device)
-        outy = self.model(x.float())
-        error = abs(outy.detach().cpu().numpy()[0]-label.numpy())
-        self.train()
-        return error
+        self.model.eval()
+        out = self.model(img)
+        self.model.train()
+
+        out_boxes = out[0]['boxes'].cpu().detach().numpy()
+        out_scores = out[0]['scores'].cpu().detach().numpy()
+        gt = target['boxes'][0]
+
+        detected = 0
+        for i, b in enumerate(out_boxes):
+            if out_scores[i] > 0.5:
+                if utils.bb_intersection_over_union(gt, b) > self.hparams.iou_threshold:
+                    detected = 1
+
+        return detected
 
 
     #@pl.data_loader
     def train_dataloader(self):
         if self.hparams.continuous:
-            return DataLoader(MDTLUNADatasetContinuous(self.hparams.datasetfile,
+            return DataLoader(LIDCDatasetContinuous(self.hparams.datasetfile,
                                                                transition_phase_after=self.hparams.transition_phase_after,
                                                                 seed=self.hparams.seed),
-                              batch_size=self.hparams.batch_size, num_workers=4, drop_last=True, pin_memory=False)
+                              batch_size=self.hparams.batch_size, num_workers=4, drop_last=True, pin_memory=False, collate_fn=utils.collate_fn)
         else:
-            return DataLoader(MDTLUNADataset(self.hparams.datasetfile,
+            return DataLoader(LIDCDataset(self.hparams.datasetfile,
                                               iterations=self.hparams.noncontinuous_steps,
                                               batch_size=self.hparams.batch_size,
                                               split=self.hparams.noncontinuous_train_splits,
                                               res=self.hparams.scanner,
-                                              seed=self.hparams.seed
+                                              seed=self.hparams.seed,
+                                            cropped_to=(288, 288)
                                               ),
-                              batch_size=self.hparams.batch_size, num_workers=4, pin_memory=False)
+                              batch_size=self.hparams.batch_size, num_workers=4, pin_memory=False,
+                              collate_fn=utils.collate_fn)
 
     #@pl.data_loader
     def val_dataloader(self):
-        return DataLoader(MDTLUNADataset(self.hparams.datasetfile,
-                                          split='val'),
-                          batch_size=4,
-                          num_workers=2, pin_memory=False, drop_last=False)
+        return DataLoader(LIDCDataset(self.hparams.datasetfile,
+                                          split='val', validation=True, cropped_to=(288, 288)),
+                          batch_size=1,
+                          num_workers=2, pin_memory=False, drop_last=False,
+                          collate_fn=utils.collate_fn)
 
 class DynamicMemoryLN():
 
@@ -395,8 +426,10 @@ class DynamicMemoryLN():
         if transformgrams:
             self.transformer = SparseRandomProjection(random_state=seed, n_components=30)
             self.transformer.fit(graminits)
+            with open('graminits.pkl', 'wb') as f:
+                pickle.dump(graminits, f)
             for mi in initelements:
-                mi.current_grammatrix = self.transformer.transform(mi.current_grammatrix.reshape(1, -1))
+                mi.current_grammatrix = self.transformer.transform(mi.current_grammatrix.reshape(1, -1))[0]
             trans_initelements = self.transformer.transform(graminits)
         else:
             self.transformer = None
@@ -407,18 +440,21 @@ class DynamicMemoryLN():
 
         self.domaincomplete = {0: True}
 
-        self.domainPerf = {0: collections.deque(maxlen=perf_queue_len)} #TODO: this is an arbritary threshold
+        self.domainPerf = {0: collections.deque(maxlen=perf_queue_len)}
         self.perf_queue_len = perf_queue_len
         self.outlier_memory = []
-        self.outlier_epochs = 25 #TODO: this is an arbritary threshold
+        self.outlier_epochs = 10 #TODO: this is an arbritary threshold
 
-        self.img_size = (64, 128, 128)
+        self.img_size = (288, 288)
+
+        print('init memory item', self.memorylist[0].current_grammatrix)
 
     def check_outlier_memory(self, budget, model):
         if len(self.outlier_memory)>5 and int(budget)>=5:
             outlier_grams = [o.current_grammatrix for o in self.outlier_memory]
 
             distances = squareform(pdist(outlier_grams))
+            print('check outlier memory distances', distances)
             if sorted([np.array(sorted(d)[:6]).sum() for d in distances])[5]<0.20: #TODO: this is an arbritary threshold
 
                 clf = IsolationForest(n_estimators=5, random_state=self.seed, warm_start=True, contamination=0.10).fit(
@@ -445,7 +481,7 @@ class DynamicMemoryLN():
                                 to_delete.append(self.outlier_memory[k])
                                 budget -= 1.0
                                 self.labeling_counter += 1
-                                self.domainPerf[new_domain_label].append(model.get_absolute_error(elem.img, elem.label))
+                                self.domainPerf[new_domain_label].append(model.check_detection(elem.img, elem.target))
                     else:
                         print('run out of budget ', budget)
                 for elem in to_delete:
@@ -491,7 +527,7 @@ class DynamicMemoryLN():
 
         domain = self.check_pseudodomain(item.current_grammatrix)
         item.pseudo_domain = domain
-
+        print('domain detected', domain)
         if domain==-1:
             #insert into outlier memory
             #check outlier memory for new clusters
@@ -514,7 +550,7 @@ class DynamicMemoryLN():
                     self.domaincounter[domain] += 1
                 self.memorylist[idx] = item
                 self.labeling_counter += 1
-                self.domainPerf[domain].append(model.get_absolute_error(item.img, item.label))
+                self.domainPerf[domain].append(model.check_detection(item.img, item.target))
 
                 # add tree to clf of domain
                 clf = self.isoforests[domain]
@@ -543,14 +579,46 @@ class DynamicMemoryLN():
 
         for j, clf in self.isoforests.items():
             current_pred = clf.decision_function(grammatrix.reshape(1, -1))
-
             if current_pred>max_pred:
                 current_domain = j
                 max_pred = current_pred
 
         return current_domain
 
-    def get_training_batch(self, batchsize, batches=1):
+    def get_cropped_mi(self, mi, cropped_to):
+        img = mi.img
+        crop_target = copy.deepcopy(mi.target)
+        box = crop_target['boxes']
+
+        if box[0, 3] > cropped_to[0]:
+            min_x = box[0, 3] - cropped_to[0]
+            max_x = img.shape[1] - cropped_to[0]
+        else:
+            min_x = 0
+            max_x = cropped_to[0] - box[0, 3]
+
+        if box[0, 2] > cropped_to[1]:
+            min_y = box[0, 2] - cropped_to[1]
+            max_y = img.shape[2] - cropped_to[1]
+        else:
+            min_y = 0
+            max_y = cropped_to[1] - box[0, 2]
+
+        start_x = random.randint(min_x, max_x)
+        start_y = random.randint(min_y, max_y)
+
+        crop_img = img[:, start_x:start_x + cropped_to[0], start_y:start_y + cropped_to[1]]
+        box[0, 0] -= start_y
+        box[0, 1] -= start_x
+        box[0, 2] -= start_y
+        box[0, 3] -= start_x
+
+        crop_target['boxes'] = box
+
+
+        return crop_img, crop_target
+
+    def get_training_batch(self, batchsize, cropped_to=(288, 288)):
         xs = []
         ys = []
 
@@ -564,33 +632,31 @@ class DynamicMemoryLN():
                     if mi.pseudo_domain == d:
                         to_force.append(mi)
 
-        for b in range(batches):
-            j = 0
-            bs = batchsize
-            x = torch.empty(size=(batchsize, 1, self.img_size[0], self.img_size[1], self.img_size[2]))
-            y = torch.empty(size=(batchsize, 1))
+        j = 0
+        bs = batchsize
+        images = []
+        targets = []
 
-            random.shuffle(to_force)
-            for mi in to_force[-half_batch:]:
-                if j<bs:
-                    x[j] = mi.img
-                    y[j] = mi.label
-                    j += 1
-                    mi.traincounter += 1
+        random.shuffle(to_force)
+        for mi in to_force[-half_batch:]:
+            if j<bs:
+                crop_img, crop_target = self.get_cropped_mi(mi, cropped_to)
+                images.append(crop_img)
+                targets.append(crop_target)
+                j += 1
+                mi.traincounter += 1
 
-            bs -= j
-            if bs>0:
-                random.shuffle(self.memorylist)
-                for mi in self.memorylist[-bs:]:
-                    x[j] = mi.img
-                    y[j] = mi.label
-                    j += 1
-                    mi.traincounter += 1
+        bs -= j
+        if bs>0:
+            random.shuffle(self.memorylist)
+            for mi in self.memorylist[-bs:]:
+                crop_img, crop_target = self.get_cropped_mi(mi, cropped_to)
+                images.append(crop_img)
+                targets.append(crop_target)
+                j += 1
+                mi.traincounter += 1
 
-            xs.append(x)
-            ys.append(y)
-
-        return (xs, ys)
+        return (images, targets)
 
     def get_domainitems(self, domain):
         items = []
@@ -637,50 +703,82 @@ class NaiveDynamicMemoryLN():
                 self.forceitems.append(item)
                 self.labeling_counter += 1
 
-    def get_training_batch(self, batchsize, batches=1):
+    def get_cropped_mi(self, mi, cropped_to):
+        img = mi.img
+        crop_target = copy.deepcopy(mi.target)
+        box = crop_target['boxes']
+
+        if box[0, 3] > cropped_to[0]:
+            min_x = box[0, 3] - cropped_to[0]
+            max_x = img.shape[1] - cropped_to[0]
+        else:
+            min_x = 0
+            max_x = cropped_to[0] - box[0, 3]
+
+        if box[0, 2] > cropped_to[1]:
+            min_y = box[0, 2] - cropped_to[1]
+            max_y = img.shape[2] - cropped_to[1]
+        else:
+            min_y = 0
+            max_y = cropped_to[1] - box[0, 2]
+
+        start_x = random.randint(min_x, max_x)
+        start_y = random.randint(min_y, max_y)
+
+        crop_img = img[:, start_x:start_x + cropped_to[0], start_y:start_y + cropped_to[1]]
+        box[0, 0] -= start_y
+        box[0, 1] -= start_x
+        box[0, 2] -= start_y
+        box[0, 3] -= start_x
+
+        crop_target['boxes'] = box
+
+
+        return crop_img, crop_target
+
+    def get_training_batch(self, batchsize, cropped_to=(288, 288)):
         xs = []
         ys = []
 
         half_batch = int(batchsize / 2)
 
-        for b in range(batches):
-            j = 0
-            bs = batchsize
-            x = torch.empty(size=(batchsize, 1, self.img_size[0], self.img_size[1], self.img_size[2]))
-            y = torch.empty(size=(batchsize, 1))
+        j = 0
+        bs = batchsize
+        images = []
+        targets = []
 
-            if len(self.forceitems)>0:
-                random.shuffle(self.forceitems)
-                m = min(len(self.forceitems), half_batch)
-                for mi in self.forceitems[-m:]:
-                    if j<bs:
-                        x[j] = mi.img
-                        y[j] = mi.label
-                        j += 1
-                        mi.traincounter += 1
-
-            bs -= j
-            if bs>0:
-                random.shuffle(self.memorylist)
-                for mi in self.memorylist[-bs:]:
-                    x[j] = mi.img
-                    y[j] = mi.label
+        if len(self.forceitems)>0:
+            random.shuffle(self.forceitems)
+            m = min(len(self.forceitems), half_batch)
+            for mi in self.forceitems[-m:]:
+                if j < bs:
+                    crop_img, crop_target = self.get_cropped_mi(mi, cropped_to)
+                    images.append(crop_img)
+                    targets.append(crop_target)
                     j += 1
                     mi.traincounter += 1
 
-            xs.append(x)
-            ys.append(y)
+        bs -= j
+        if bs>0:
+            random.shuffle(self.memorylist)
+            for mi in self.memorylist[-bs:]:
+                crop_img, crop_target = self.get_cropped_mi(mi, cropped_to)
+                images.append(crop_img)
+                targets.append(crop_target)
+                j += 1
+                mi.traincounter += 1
+
 
         self.forceitems = []
 
-        return (xs, ys)
+        return (images, targets)
 
 
 class MemoryItem():
 
-    def __init__(self, img, label, filepath, scanner, current_grammatrix=None, pseudo_domain=None):
+    def __init__(self, img, target, filepath, scanner, current_grammatrix=None, pseudo_domain=None):
         self.img = img.detach().cpu()
-        self.label = label.detach().cpu()
+        self.target = target
         self.filepath = filepath
         self.scanner = scanner
         self.counter = 0
@@ -695,8 +793,8 @@ def trained_model(hparams, train=True):
         device = torch.device('cuda')
     else:
         device = torch.device('cpu')
-    model = FastGramDynamicMemoryBrainAge(hparams=hparams, device=device, for_training=train)
-    exp_name = utils.get_expname(model.hparams)
+    model = FastGramDynamicMemoryLungNodule(hparams=hparams, device=device, training=train)
+    exp_name = utils.get_expname(model.hparams, task='ln')
     weights_path = utils.TRAINED_MODELS_FOLDER + exp_name +'.pt'
     print(weights_path)
     if not os.path.exists(weights_path) and train:
@@ -747,13 +845,13 @@ def trained_model(hparams, train=True):
 
 def is_cached(hparams):
     #model = FastGramDynamicMemoryBrainAge(hparams=hparams)
-    hparams = utils.default_params(FastGramDynamicMemoryBrainAge.get_default_hparams(), hparams)
-    exp_name = utils.get_expname(hparams)
+    hparams = utils.default_params(FastGramDynamicMemoryLungNodule.get_default_hparams(), hparams)
+    exp_name = utils.get_expname(hparams, task='ln')
     return os.path.exists(utils.TRAINED_MODELS_FOLDER + exp_name + '.pt')
 
 
 def cached_path(hparams):
     #model = FastGramDynamicMemoryBrainAge(hparams=hparams)
-    hparams = utils.default_params(FastGramDynamicMemoryBrainAge.get_default_hparams(), hparams)
-    exp_name = utils.get_expname(hparams)
+    hparams = utils.default_params(FastGramDynamicMemoryLungNodule.get_default_hparams(), hparams)
+    exp_name = utils.get_expname(hparams, task='ln')
     return utils.TRAINED_MODELS_FOLDER + exp_name + '.pt'
