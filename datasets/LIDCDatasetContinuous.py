@@ -66,7 +66,6 @@ class LIDCDatasetContinuous(Dataset):
         img = mut.intensity_window(img, low=-1024, high=1500)
         img = mut.norm01(img)
 
-        # return img[None, :, :]
         return np.tile(img, [3, 1, 1])
 
     def load_annotation(self, elem):
