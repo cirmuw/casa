@@ -6,63 +6,93 @@ import torch.nn as nn
 ########################################################################################################################
 
 class Encoder(nn.Module):
-    def __init__(self):
+    def __init__(self, droprate=0.0):
         super(Encoder, self).__init__()
         self.feature = nn.Sequential()      # Define the feature extractor
         self.feature.add_module('f_conv1_1', nn.Conv3d(1, 32, kernel_size=3, padding=1))
         self.feature.add_module('f_relu_1_1', nn.ReLU(True))
+        if droprate!=0.0: #this is an ugly hack
+            self.feature.add_module('f_dropout_1_1', nn.Dropout(droprate))
         self.feature.add_module('f_bn1_1', nn.BatchNorm3d(32))
         self.feature.add_module('f_conv1_2', nn.Conv3d(32, 32, kernel_size=3, padding=1))
         self.feature.add_module('f_relu_1_2', nn.ReLU(True))
+        if droprate != 0.0:
+            self.feature.add_module('f_dropout_1_2', nn.Dropout(droprate))
         self.feature.add_module('f_bn1_2', nn.BatchNorm3d(32))
         self.feature.add_module('f_pool1', nn.MaxPool3d(2))
 
         self.feature.add_module('f_conv2_1', nn.Conv3d(32, 64, kernel_size=3, padding=1))
         self.feature.add_module('f_relu_2_1', nn.ReLU(True))
+        if droprate != 0.0:
+            self.feature.add_module('f_dropout_2_1', nn.Dropout(droprate))
         self.feature.add_module('f_bn2_1', nn.BatchNorm3d(64))
         self.feature.add_module('f_conv2_2', nn.Conv3d(64, 64, kernel_size=3, padding=1))
         self.feature.add_module('f_relu_2_2', nn.ReLU(True))
+        if droprate != 0.0:
+            self.feature.add_module('f_dropout_2_2', nn.Dropout(droprate))
         self.feature.add_module('f_bn2_2', nn.BatchNorm3d(64))
         self.feature.add_module('f_pool2', nn.MaxPool3d(2))
 
         self.feature.add_module('f_conv3_1', nn.Conv3d(64, 64, kernel_size=3, padding=1))
         self.feature.add_module('f_relu_3_1', nn.ReLU(True))
+        if droprate != 0.0:
+            self.feature.add_module('f_dropout_3_1', nn.Dropout(droprate))
         self.feature.add_module('f_bn3_1', nn.BatchNorm3d(64))
         self.feature.add_module('f_conv3_2', nn.Conv3d(64, 64, kernel_size=3, padding=1))
         self.feature.add_module('f_relu_3_2', nn.ReLU(True))
+        if droprate != 0.0:
+            self.feature.add_module('f_dropout_3_2', nn.Dropout(droprate))
         self.feature.add_module('f_bn3_2', nn.BatchNorm3d(64))
         self.feature.add_module('f_pool3', nn.MaxPool3d(2))
 
         self.feature.add_module('f_conv4_1', nn.Conv3d(64, 96, kernel_size=3, padding=1))
         self.feature.add_module('f_relu_4_1', nn.ReLU(True))
+        if droprate != 0.0:
+            self.feature.add_module('f_dropout_4_1', nn.Dropout(droprate))
         self.feature.add_module('f_bn4_1', nn.BatchNorm3d(96))
         self.feature.add_module('f_conv4_2', nn.Conv3d(96, 96, kernel_size=3, padding=1))
         self.feature.add_module('f_relu_4_2', nn.ReLU(True))
+        if droprate != 0.0:
+            self.feature.add_module('f_dropout_4_2', nn.Dropout(droprate))
         self.feature.add_module('f_bn4_2', nn.BatchNorm3d(96))
         self.feature.add_module('f_conv4_3', nn.Conv3d(96, 96, kernel_size=3, padding=1))
         self.feature.add_module('f_relu_4_3', nn.ReLU(True))
+        if droprate != 0.0:
+            self.feature.add_module('f_dropout_4_3', nn.Dropout(droprate))
         self.feature.add_module('f_bn4_3', nn.BatchNorm3d(96))
         self.feature.add_module('f_pool4', nn.MaxPool3d(2))
 
         self.feature.add_module('f_conv5_1', nn.Conv3d(96, 96, kernel_size=3, padding=1))
         self.feature.add_module('f_relu_5_1', nn.ReLU(True))
+        if droprate != 0.0:
+            self.feature.add_module('f_dropout_5_1', nn.Dropout(droprate))
         self.feature.add_module('f_bn5_1', nn.BatchNorm3d(96))
         self.feature.add_module('f_conv5_2', nn.Conv3d(96, 96, kernel_size=3, padding=1))
         self.feature.add_module('f_relu_5_2', nn.ReLU(True))
+        if droprate != 0.0:
+            self.feature.add_module('f_dropout_5_2', nn.Dropout(droprate))
         self.feature.add_module('f_bn5_2', nn.BatchNorm3d(96))
         self.feature.add_module('f_conv5_3', nn.Conv3d(96, 96, kernel_size=3, padding=1))
         self.feature.add_module('f_relu_5_3', nn.ReLU(True))
+        if droprate != 0.0:
+            self.feature.add_module('f_dropout_5_3', nn.Dropout(droprate))
         self.feature.add_module('f_bn5_3', nn.BatchNorm3d(96))
         self.feature.add_module('f_pool5', nn.MaxPool3d(2))
 
         self.feature.add_module('f_conv6_1', nn.Conv3d(96, 96, kernel_size=3, padding=1))
         self.feature.add_module('f_relu_6_1', nn.ReLU(True))
+        if droprate != 0.0:
+            self.feature.add_module('f_dropout_6_1', nn.Dropout(droprate))
         self.feature.add_module('f_bn6_1', nn.BatchNorm3d(96))
         self.feature.add_module('f_conv6_2', nn.Conv3d(96, 96, kernel_size=3, padding=1))
         self.feature.add_module('f_relu_6_2', nn.ReLU(True))
+        if droprate != 0.0:
+            self.feature.add_module('f_dropout_6_2', nn.Dropout(droprate))
         self.feature.add_module('f_bn6_2', nn.BatchNorm3d(96))
         self.feature.add_module('f_conv6_3', nn.Conv3d(96, 96, kernel_size=3, padding=1))
         self.feature.add_module('f_relu_6_3', nn.ReLU(True))
+        if droprate != 0.0:
+            self.feature.add_module('f_dropout_6_3', nn.Dropout(droprate))
         self.feature.add_module('f_bn6_3', nn.BatchNorm3d(96))
         self.feature.add_module('f_features', nn.MaxPool3d(2))
 
@@ -78,12 +108,14 @@ class Encoder(nn.Module):
         return feature_embedding
 
 class Regressor(nn.Module):
-    def __init__(self):
+    def __init__(self, droprate=0.0):
         super(Regressor, self).__init__()
 
         self.regressor = nn.Sequential()
         self.regressor.add_module('r_fc2', nn.Linear(96, 32))
         self.regressor.add_module('r_relu2', nn.ReLU(True))
+        if droprate != 0.0:
+            self.regressor.add_module('r_dropout', nn.Dropout(droprate))
         self.regressor.add_module('r_pred', nn.Linear(32, 1))
 
     def forward(self, x):
@@ -107,11 +139,11 @@ class DomainPredictor(nn.Module):
 
 
 class EncoderRegressor(nn.Module):
-    def __init__(self):
+    def __init__(self, droprate=0.0):
         super(EncoderRegressor, self).__init__()
 
-        self.encoder = Encoder()
-        self.regressor = Regressor()
+        self.encoder = Encoder(droprate)
+        self.regressor = Regressor(droprate)
 
     def forward(self, x):
         encoder = self.encoder(x)

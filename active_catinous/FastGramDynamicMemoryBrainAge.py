@@ -58,7 +58,10 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
         self.to(device)
         print('init')
 
-        self.model = EncoderRegressor()
+        if 'dropout_rate' in self.hparams:
+            self.model = EncoderRegressor(droprate=self.hparams.dropout_rate)
+        else:
+            self.model = EncoderRegressor()
         self.model.to(device)
         if not self.hparams.base_model is None:
             state_dict =  torch.load(os.path.join(utils.TRAINED_MODELS_FOLDER, self.hparams.base_model))
