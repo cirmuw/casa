@@ -60,6 +60,7 @@ class FastGramDynamicMemoryBrainAge(pl.LightningModule):
 
         if 'dropout_rate' in self.hparams:
             self.model = EncoderRegressor(droprate=self.hparams.dropout_rate)
+            print('dropout init')
         else:
             self.model = EncoderRegressor()
         self.model.to(device)

@@ -15,10 +15,16 @@ import skimage.transform
 import numpy as np
 import pydicom as pyd
 
+import models.AgePredictor as agemodels
+import monai.networks.nets as monaimodels
+from models.unet3d import EncoderModelGenesis
+import torchvision.models as models
+
+
 LOGGING_FOLDER = '/project/catinous/active_catinous/tensorboard_logs/'
-TRAINED_MODELS_FOLDER = '/project/catinous/active_catinous/trained_models/'
-TRAINED_MEMORY_FOLDER = '/project/catinous/active_catinous/trained_memory/'
-RESPATH = '/project/catinous/active_catinous/results/'
+TRAINED_MODELS_FOLDER = '/project/catinous/active_catinous/trained_models/MELBA/'
+TRAINED_MEMORY_FOLDER = '/project/catinous/active_catinous/trained_memory/MELBA/'
+RESPATH = '/project/catinous/active_catinous/results/MELBA/'
 
 def default_params(dparams, params):
     """Copies all key value pairs from params to dparams if not present"""
@@ -32,7 +38,7 @@ def default_params(dparams, params):
                 matched_params[key] = default_params(dparams[key], params[key])
     return matched_params
 
-def get_expname(hparams, task=None):
+def get_expname(hparams):
     if type(hparams) is argparse.Namespace:
         hparams = vars(hparams).copy()
     elif type(hparams) is AttributeDict:
@@ -43,11 +49,9 @@ def get_expname(hparams, task=None):
 
     hashed_params = hash(hparams, length=10)
 
-    if task is None:
-        expname = 'cont' if hparams['continuous'] else 'batch'
-    else:
-        expname = task
-        expname += '_cont' if hparams['continuous'] else '_batch'
+
+    expname = hparams['task']
+    expname += '_cont' if hparams['continuous'] else '_batch'
 
     if 'naive_continuous' in hparams:
         expname += '_naive'
@@ -262,3 +266,39 @@ def load_box_annotation(elem, cropped_to=None, shiftx_aug=0, shifty_aug=0, valid
     box[0, 3] = y2
 
     return box
+
+def load_model_stylemodel(task: str, droprate, stylemodel=True):
+    stylemodel = None
+    gramlayers = None
+
+    if task == 'brainage':
+        model = agemodels.EncoderRegressor(droprate=droprate)
+
+        if stylemodel:
+            stylemodel = EncoderModelGenesis()
+            # Load pretrained model genesis
+            weight_dir = 'models/Genesis_Chest_CT.pt'
+            checkpoint = torch.load(weight_dir)
+            state_dict = checkpoint['state_dict']
+            unParalled_state_dict = {}
+            for key in state_dict.keys():
+                if key.startswith('module.down_'):
+                    unParalled_state_dict[key.replace("module.", "")] = state_dict[key]
+            stylemodel.load_state_dict(unParalled_state_dict)
+            gramlayers = [stylemodel.down_tr64.ops[1].conv1]
+            stylemodel.eval()
+    elif task == 'cardiac':
+        model = monaimodels.UNet(dimensions=2, in_channels=1, out_channels=4,
+                                 channels=(64, 128, 256, 512), strides=(2, 2, 2, 2), norm='batch',
+                                 dropout=droprate, num_res_units=2)
+
+        if stylemodel:
+            stylemodel = models.resnet50(pretrained=True)
+            gramlayers = [stylemodel.layer1[-1].conv1,
+                          stylemodel.layer2[-1].conv1]
+            stylemodel.eval()
+    else:
+        raise NotImplementedError(f'model {task} not implemented')
+
+
+    return model, stylemodel, gramlayers
