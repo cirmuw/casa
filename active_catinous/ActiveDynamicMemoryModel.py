@@ -66,9 +66,12 @@ class ActiveDynamicMemoryModel(pl.LightningModule):
             self.TaskDataset = BrainAgeBatch
             self.get_task_error = self.get_absolute_error
         elif self.hparams.task == 'cardiac':
-            self.loss = mloss.DiceLoss()  # TODO: or cross entropy as in nat comm?
+            #self.loss = mloss.DiceLoss(to_onehot_y=True, softmax=True) # TODO: or cross entropy as in nat comm?
+            self.loss = nn.CrossEntropyLoss()
             self.TaskDataset = CardiacBatch #TODO: implement cardiac dataset
             self.get_task_error = self.get_dice_error #TODO: implement!
+            self.mae = nn.L1Loss() #TODO: better loss?
+
 
         # Initilize checkpoints to calculate BWT, FWT after training
         self.scanner_checkpoints = dict()
@@ -156,6 +159,15 @@ class ActiveDynamicMemoryModel(pl.LightningModule):
         x = x[None, :].to(self.device)
         outy = self.model(x.float())
         error = abs(outy.detach().cpu().numpy()[0]-label.numpy())
+        self.train()
+        return error
+
+    def get_dice_error(self, image, target):
+        self.eval()
+        x = image
+        x = x[None, :].to(self.device)
+        outy = self.model(x.float())
+        error = self.loss(outy, target.to(self.device))
         self.train()
         return error
 
@@ -299,6 +311,7 @@ class ActiveDynamicMemoryModel(pl.LightningModule):
         x, y, img, res = batch
         self.grammatrices = []
 
+        print(x.shape)
         y_hat = self.forward(x.float())
 
         res = res[0]

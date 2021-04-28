@@ -289,7 +289,7 @@ def load_model_stylemodel(task: str, droprate, stylemodel=True):
             stylemodel.eval()
     elif task == 'cardiac':
         model = monaimodels.UNet(dimensions=2, in_channels=1, out_channels=4,
-                                 channels=(64, 128, 256, 512), strides=(2, 2, 2, 2), norm='batch',
+                                 channels=(64, 128, 256), strides=(2, 2, 2), norm='batch',
                                  dropout=droprate, num_res_units=2)
 
         if stylemodel:
