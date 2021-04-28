@@ -288,9 +288,9 @@ class ActiveDynamicMemoryModel(pl.LightningModule):
 
                     y_hat = self.model(x.float())
                     if loss is None:
-                        loss = self.loss(y_hat, y.float())
+                        loss = self.loss(y_hat, y)
                     else:
-                        loss += self.loss(y_hat, y.float())
+                        loss += self.loss(y_hat, y)
 
                 self.train_counter += 1
                 self.log('train_loss', loss)
@@ -300,7 +300,7 @@ class ActiveDynamicMemoryModel(pl.LightningModule):
 
         else:
             y_hat = self.forward(x.float())
-            loss = self.loss(y_hat, y[:, None].float())
+            loss = self.loss(y_hat, y)
             self.log('train_loss', loss)
             return loss
 
@@ -311,12 +311,11 @@ class ActiveDynamicMemoryModel(pl.LightningModule):
         x, y, img, res = batch
         self.grammatrices = []
 
-        print(x.shape)
         y_hat = self.forward(x.float())
 
         res = res[0]
-        self.log_dict({f'val_loss_{res}': self.loss(y_hat, y[:, None].float()),
-                       f'val_mae_{res}': self.mae(y_hat, y[:, None].float())}) #TODO: MAE can only work for brain age not cardiac
+        self.log_dict({f'val_loss_{res}': self.loss(y_hat, y),
+                       f'val_mae_{res}': self.mae(y_hat, y)}) #TODO: MAE can only work for brain age not cardiac
 
 
     def test_step(self, batch, batch_idx):
