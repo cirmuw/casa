@@ -424,7 +424,7 @@ def trained_model(hparams, train=True):
         new_state_dict = dict()
         for k in state_dict.keys():
             if k.startswith('model.'):
-                new_state_dict[k.replace("model.", "")] = state_dict[k]
+                new_state_dict[k.replace("model.", "", 1)] = state_dict[k]
         model.model.load_state_dict(new_state_dict)
         model.freeze()
     else:

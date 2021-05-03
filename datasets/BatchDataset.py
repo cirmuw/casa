@@ -22,9 +22,15 @@ class BatchDataset(Dataset):
 
         if res is not None:
             if type(res) is list:
-                selection = np.any([self.df.scanner == x for x in res], axis=0)
+                if 'scanner' in self.df.columns:
+                    selection = np.any([self.df.scanner == x for x in res], axis=0)
+                else:
+                    selection = np.any([self.df.Scanner == x for x in res], axis=0)
             else:
-                selection = self.df.scanner == res
+                if 'scanner' in self.df.columns:
+                    selection = self.df.scanner == res
+                else:
+                    selection = self.df.Scanner == res
 
             self.df = self.df.loc[selection]
             self.df = self.df.reset_index()
@@ -302,7 +308,7 @@ class CardiacBatch(BatchDataset):
     def __init__(self, datasetfile, split=['base'], iterations=None, batch_size=None, res=None, seed=None):
         super(BatchDataset, self).__init__()
         self.init(datasetfile, split, iterations, batch_size, res, seed)
-        self.outsize = (240, 196)
+        self.outsize = (240, 192)
 
         print('init cardiac batch with datasetfile', datasetfile)
 
@@ -329,12 +335,14 @@ class CardiacBatch(BatchDataset):
         # mask = sitk.ReadImage(elem.filepath[:-7] + '_gt.nii.gz')
         # mask = sitk.GetArrayFromImage(mask)[elem.t, elem.slice, :, :]
 
-        # if img.shape != self.outsize:
-        #    img = self.crop_center_or_pad(img, self.outsize[0], self.outsize[1])
-        #    mask = self.crop_center_or_pad(mask, self.outsize[0], self.outsize[1])
 
         img = np.load(elem.slicepath)
         mask = np.load(elem.slicepath[:-4] + '_gt.npy')
+
+        if img.shape != self.outsize:
+           img = self.crop_center_or_pad(img, self.outsize[0], self.outsize[1])
+           mask = self.crop_center_or_pad(mask, self.outsize[0], self.outsize[1])
+
 
         return img[None, :, :], mask
 
