@@ -332,11 +332,14 @@ class ActiveDynamicMemoryModel(pl.LightningModule):
 
             one_hot_pred = mutils.one_hot(y_hat_flat, num_classes=4)
             one_hot_target = mutils.one_hot(y, num_classes=4)
+            dm_b = DiceMetric(include_background=False, reduction='mean_batch')
 
-            dice = compute_meandice(one_hot_pred, one_hot_target, include_background=False)
+            dice, _ = dm_b(one_hot_pred, one_hot_target)
 
             self.log_dict({f'val_loss_{res}': loss,
-                           f'val_dice_{res}': dice})
+                           f'val_dice_1_{res}': dice[0],
+                           f'val_dice_2_{res}': dice[1],
+                           f'val_dice_3_{res}': dice[2]})
 
 
     #def test_step(self, batch, batch_idx):
