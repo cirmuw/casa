@@ -156,7 +156,7 @@ class ActiveDynamicMemoryModel(pl.LightningModule):
                                                       perf_queue_len=self.hparams.len_perf_queue,
                                                      transformgrams=self.hparams.transformgrams)
 
-            self.insert_element = self.insert_element_style
+            self.insert_element = self.insert_element_casa
 
         elif self.hparams.method == 'uncertainty':
             self.trainingsmemory = UncertaintyDynamicMemory(initelements=initelements,
@@ -239,7 +239,7 @@ class ActiveDynamicMemoryModel(pl.LightningModule):
 
 
     # This is called when hparams.method == 'style'
-    def insert_element_style(self, x, y, filepath, scanner):
+    def insert_element_casa(self, x, y, filepath, scanner):
         budget_before = self.budget
 
         for i, img in enumerate(x):
@@ -263,8 +263,12 @@ class ActiveDynamicMemoryModel(pl.LightningModule):
                     if len(self.trainingsmemory.domainError[k]) == self.hparams.len_perf_queue:
                         mean_error = np.mean(self.trainingsmemory.domainError[k])
                         print('domain', k, mean_error, self.trainingsmemory.domainError[k])
-                        if mean_error < self.hparams.completion_limit:
-                            self.trainingsmemory.domaincomplete[k] = True
+                        if self.hparams.task=='brainage':
+                            if mean_error < self.hparams.completion_limit:
+                                self.trainingsmemory.domaincomplete[k] = True
+                        elif self.hparams.task=='cardiac':
+                            if mean_error > self.hparams.completion_limit:
+                                self.trainingsmemory.domaincomplete[k] = True
 
             return True
         else:
