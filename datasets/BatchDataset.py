@@ -59,8 +59,7 @@ class BrainAgeBatch(BatchDataset):
         img = mut.norm01(img)
         img = img[None, :, :, :]
 
-        return torch.tensor(img).float(), torch.tensor(self.df.iloc[index].Age).float(), self.df.iloc[index].Image, \
-               self.df.iloc[index].Scanner
+        return torch.tensor(img).float(), torch.tensor(self.df.iloc[index].Age).float(), self.df.iloc[index].Scanner, self.df.iloc[index].Image
 
 class LIDCBatch(BatchDataset):
 

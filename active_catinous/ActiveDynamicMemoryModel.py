@@ -190,7 +190,7 @@ class ActiveDynamicMemoryModel(pl.LightningModule):
         for batch in dl:
             torch.cuda.empty_cache()
 
-            x, y, filepath, scanner = batch
+            x, y, scanner, filepath = batch
             x = x.to(self.device)
             _ = self.stylemodel(x.float())
 
@@ -316,7 +316,7 @@ class ActiveDynamicMemoryModel(pl.LightningModule):
         return self.model(x)
 
     def validation_step(self, batch, batch_idx):
-        x, y, img, res = batch
+        x, y, res, img = batch
         self.grammatrices = []
 
         y_hat = self.forward(x.float())
@@ -340,7 +340,7 @@ class ActiveDynamicMemoryModel(pl.LightningModule):
 
 
     #def test_step(self, batch, batch_idx):
-    #    x, y, img, res = batch
+    #    x, y, res, img = batch
     #    self.grammatrices = []
 
     #    y_hat = self.forward(x.float())
