@@ -30,6 +30,8 @@ from sklearn.metrics import mean_absolute_error
 from scipy.spatial.distance import pdist, squareform
 
 import monai.losses as mloss
+from monai.metrics import compute_meandice, DiceMetric
+import monai.networks.utils as mutils
 
 from . import utils
 import collections
@@ -69,8 +71,8 @@ class ActiveDynamicMemoryModel(pl.LightningModule):
             #self.loss = mloss.DiceLoss(to_onehot_y=True, softmax=True) # TODO: or cross entropy as in nat comm?
             self.loss = nn.CrossEntropyLoss()
             self.TaskDataset = CardiacBatch #TODO: implement cardiac dataset
-            self.get_task_error = self.get_dice_error #TODO: implement!
-            self.mae = nn.L1Loss() #TODO: better loss?
+            self.get_task_error = self.get_dice_metric #TODO: implement!
+            #self.mae = nn.L1Loss() #TODO: better loss?
 
 
         # Initilize checkpoints to calculate BWT, FWT after training
@@ -162,14 +164,20 @@ class ActiveDynamicMemoryModel(pl.LightningModule):
         self.train()
         return error
 
-    def get_dice_error(self, image, target):
+    def get_dice_metric(self, image, target):
         self.eval()
         x = image
         x = x[None, :].to(self.device)
+        y = target[:, None, :, :].to(self.device)
         outy = self.model(x.float())
-        error = self.loss(outy, target.to(self.device))
+        y_hat_flat = torch.argmax(outy, dim=1)[:, None, :, :]
+
+        one_hot_pred = mutils.one_hot(y_hat_flat, num_classes=4)
+        one_hot_target = mutils.one_hot(y, num_classes=4)
+
+        dice = compute_meandice(one_hot_pred, one_hot_target, include_background=False)
         self.train()
-        return error
+        return dice
 
     def getmemoryitems_from_base(self, num_items=128):
         dl = DataLoader(self.TaskDataset(self.hparams.datasetfile,
@@ -314,39 +322,52 @@ class ActiveDynamicMemoryModel(pl.LightningModule):
         y_hat = self.forward(x.float())
 
         res = res[0]
-        self.log_dict({f'val_loss_{res}': self.loss(y_hat, y),
+        if self.hparams.task=='brainage':
+            self.log_dict({f'val_loss_{res}': self.loss(y_hat, y),
                        f'val_mae_{res}': self.mae(y_hat, y)}) #TODO: MAE can only work for brain age not cardiac
+        elif self.hparams.task=='cardiac':
+            loss = self.loss(y_hat, y)
+            y = y[:, None, :, :].to(self.device)
+            y_hat_flat = torch.argmax(y_hat, dim=1)[:, None, :, :]
+
+            one_hot_pred = mutils.one_hot(y_hat_flat, num_classes=4)
+            one_hot_target = mutils.one_hot(y, num_classes=4)
+
+            dice = compute_meandice(one_hot_pred, one_hot_target, include_background=False)
+
+            self.log_dict({f'val_loss_{res}': loss,
+                           f'val_dice_{res}': dice})
 
 
-    def test_step(self, batch, batch_idx):
-        x, y, img, res = batch
-        self.grammatrices = []
+    #def test_step(self, batch, batch_idx):
+    #    x, y, img, res = batch
+    #    self.grammatrices = []
 
-        y_hat = self.forward(x.float())
+    #    y_hat = self.forward(x.float())
 
-        res = res[0]
-        return {f'val_loss_{res}': self.loss(y_hat, y[:, None].float()),
-                f'val_mae_{res}': self.mae(y_hat, y[:, None].float())} #TODO: MAE can only work for brain age not cardiac
+    #    res = res[0]
+    #    return {f'val_loss_{res}': self.loss(y_hat, y[:, None].float()),
+    #            f'val_mae_{res}': self.mae(y_hat, y[:, None].float())} #TODO: MAE can only work for brain age not cardiac
 
-    def test_end(self, outputs):
-        val_mean = dict() #TODO: MAE can only work for brain age not cardiac
-        res_count = dict()
+    #def test_end(self, outputs):
+    #    val_mean = dict() #TODO: MAE can only work for brain age not cardiac
+    #    res_count = dict()
 
-        for output in outputs:
+    #    for output in outputs:
 
-            for k in output.keys():
-                if k not in val_mean.keys():
-                    val_mean[k] = 0
-                    res_count[k] = 0
+    #        for k in output.keys():
+    #            if k not in val_mean.keys():
+    #                val_mean[k] = 0
+    #                res_count[k] = 0
 
-                val_mean[k] += output[k]
-                res_count[k] += 1
+    #            val_mean[k] += output[k]
+    #            res_count[k] += 1
 
-        tensorboard_logs = dict()
-        for k in val_mean.keys():
-            tensorboard_logs[k] = val_mean[k] / res_count[k]
+    #    tensorboard_logs = dict()
+    #    for k in val_mean.keys():
+    #        tensorboard_logs[k] = val_mean[k] / res_count[k]
 
-        return {'log': tensorboard_logs}
+    #    return {'log': tensorboard_logs}
 
     def configure_optimizers(self):
         return torch.optim.Adam(self.parameters(), lr=self.learning_rate)
