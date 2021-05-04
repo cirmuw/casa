@@ -85,7 +85,7 @@ class DynamicMemory(ABC):
 class NaiveDynamicMemory(DynamicMemory):
 
     def __init__(self, initelements, **kwargs):
-        super.__init(initelements, **kwargs)
+        super(NaiveDynamicMemory, self).__init__(initelements, **kwargs)
         self.insert_counter = 0
         self.insert_rate = kwargs['insert_rate']
         self.forceitems = []
@@ -114,10 +114,10 @@ class NaiveDynamicMemory(DynamicMemory):
                 self.labeling_counter += 1
 
 
-class StyleDynamicMemory(DynamicMemory):
+class CasaDynamicMemory(DynamicMemory):
 
     def __init__(self, initelements, **kwargs):
-        super.__init(initelements, **kwargs)
+        super(CasaDynamicMemory, self).__init__(initelements, **kwargs)
 
 
         self.samples_per_domain = self.memorymaximum

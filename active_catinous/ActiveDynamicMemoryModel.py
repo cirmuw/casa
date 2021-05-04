@@ -36,7 +36,7 @@ import monai.networks.utils as mutils
 from . import utils
 import collections
 
-from active_catinous.ActiveDynamicMemory import NaiveDynamicMemory, StyleDynamicMemory, UncertaintyDynamicMemory
+from active_catinous.ActiveDynamicMemory import NaiveDynamicMemory, CasaDynamicMemory, UncertaintyDynamicMemory
 from active_catinous.ActiveDynamicMemory import MemoryItem
 
 
@@ -50,7 +50,8 @@ class ActiveDynamicMemoryModel(pl.LightningModule):
 
         self.model, self.stylemodel, self.gramlayers = utils.load_model_stylemodel(self.hparams.task,
                                                                                    self.hparams.droprate,
-                                                                                   stylemodel=training)
+                                                                                   load_stylemodel=training)
+        self.stylemodel.to(device)
 
         self.learning_rate = self.hparams.learning_rate
         self.train_counter = 0
@@ -62,17 +63,27 @@ class ActiveDynamicMemoryModel(pl.LightningModule):
         else:
             self.budgetrate = 1 / self.hparams.allowedlabelratio
 
+
+        if not self.hparams.base_model is None:
+            state_dict =  torch.load(os.path.join(utils.TRAINED_MODELS_FOLDER, self.hparams.base_model))
+            new_state_dict = {}
+            for key in state_dict.keys():
+                new_state_dict[key.replace('model.', '', 1)] = state_dict[key]
+            self.model.load_state_dict(new_state_dict)
+
         if self.hparams.task == 'brainage':
             self.loss = nn.MSELoss()
             self.mae = nn.L1Loss()
             self.TaskDataset = BrainAgeBatch
             self.get_task_error = self.get_absolute_error
+            self.base_split = 'base_train'
         elif self.hparams.task == 'cardiac':
             #self.loss = mloss.DiceLoss(to_onehot_y=True, softmax=True) # TODO: or cross entropy as in nat comm?
             self.loss = nn.CrossEntropyLoss()
             self.TaskDataset = CardiacBatch #TODO: implement cardiac dataset
             self.get_task_error = self.get_dice_metric #TODO: implement!
             #self.mae = nn.L1Loss() #TODO: better loss?
+            self.base_split = 'base'
 
 
         # Initilize checkpoints to calculate BWT, FWT after training
@@ -129,6 +140,7 @@ class ActiveDynamicMemoryModel(pl.LightningModule):
             layer.register_forward_hook(self.gram_hook)
 
         initelements = self.getmemoryitems_from_base(num_items=self.hparams.memorymaximum)
+        print(initelements[0])
 
         if self.hparams.method == 'naive':
             self.trainingsmemory = NaiveDynamicMemory(initelements=initelements,
@@ -137,17 +149,18 @@ class ActiveDynamicMemoryModel(pl.LightningModule):
                                                       seed=self.hparams.seed)
             self.insert_element = self.insert_element_naive
 
-        elif self.hparams.method == 'style':
-            self.trainingsmemory = StyleDynamicMemory(initelements=initelements,
-                                                      memorymaximum=self.hparams.memorymaxium,
+        elif self.hparams.method == 'casa':
+            self.trainingsmemory = CasaDynamicMemory(initelements=initelements,
+                                                      memorymaximum=self.hparams.memorymaximum,
                                                       seed=self.hparams.seed,
-                                                      perf_queue_len=self.hparams.len_perf_queue)
+                                                      perf_queue_len=self.hparams.len_perf_queue,
+                                                     transformgrams=self.hparams.transformgrams)
 
             self.insert_element = self.insert_element_style
 
         elif self.hparams.method == 'uncertainty':
             self.trainingsmemory = UncertaintyDynamicMemory(initelements=initelements,
-                                                      memorymaximum=self.hparams.memorymaxium,
+                                                      memorymaximum=self.hparams.memorymaximum,
                                                       seed=self.hparams.seed,
                                                       perf_queue_len=self.hparams.len_perf_queue,
                                                       droprate=self.hparams.uncertainty_droprate)
@@ -183,7 +196,7 @@ class ActiveDynamicMemoryModel(pl.LightningModule):
         dl = DataLoader(self.TaskDataset(self.hparams.datasetfile,
                                             iterations=None,
                                             batch_size=self.hparams.batch_size,
-                                            split=['base_train']),
+                                            split=[self.base_split]),
                             batch_size=self.hparams.batch_size, num_workers=4, pin_memory=True)
 
         memoryitems = []
@@ -207,7 +220,7 @@ class ActiveDynamicMemoryModel(pl.LightningModule):
 
         return memoryitems[:num_items]
 
-    def gram_hook(self):
+    def gram_hook(self,  m, input, output):
         if self.hparams.dim == 2:
             self.grammatrices.append(utils.gram_matrix(input[0]))
         elif self.hparams.dim == 3:

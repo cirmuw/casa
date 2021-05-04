@@ -267,14 +267,14 @@ def load_box_annotation(elem, cropped_to=None, shiftx_aug=0, shifty_aug=0, valid
 
     return box
 
-def load_model_stylemodel(task: str, droprate, stylemodel=True):
+def load_model_stylemodel(task: str, droprate, load_stylemodel=True):
     stylemodel = None
     gramlayers = None
 
     if task == 'brainage':
         model = agemodels.EncoderRegressor(droprate=droprate)
 
-        if stylemodel:
+        if load_stylemodel:
             stylemodel = EncoderModelGenesis()
             # Load pretrained model genesis
             weight_dir = 'models/Genesis_Chest_CT.pt'
@@ -292,8 +292,9 @@ def load_model_stylemodel(task: str, droprate, stylemodel=True):
                                  channels=(16, 32, 64, 128, 256), strides=(2, 2, 2, 2), norm='batch',
                                  dropout=0.4, num_res_units=2)
 
-        if stylemodel:
+        if load_stylemodel:
             stylemodel = models.resnet50(pretrained=True)
+            stylemodel.conv1 = nn.Conv2d(1, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
             gramlayers = [stylemodel.layer1[-1].conv1,
                           stylemodel.layer2[-1].conv1]
             stylemodel.eval()
