@@ -202,7 +202,7 @@ class CardiacContinuous(ContinuousDataset):
         super(ContinuousDataset, self).__init__()
         self.init(datasetfile, transition_phase_after, order, seed)
 
-        self.outsize = (240, 196)
+        self.outsize = (240, 192)
 
     def crop_center_or_pad(self, img, cropx, cropy):
         x, y = img.shape
@@ -219,19 +219,12 @@ class CardiacContinuous(ContinuousDataset):
         return img[startx:startx + cropx, starty:starty + cropy]
 
     def load_image(self, elem):
-        #img = sitk.ReadImage(elem.filepath)
-        #img = sitk.GetArrayFromImage(img)[elem.t, elem.slice, :, :]
-        #img = mut.norm01(img)
-
-        #mask = sitk.ReadImage(elem.filepath[:-7] + '_gt.nii.gz')
-        #mask = sitk.GetArrayFromImage(mask)[elem.t, elem.slice, :, :]
-
-        #if img.shape != self.outsize:
-        #    img = self.crop_center_or_pad(img, self.outsize[0], self.outsize[1])
-        #    mask = self.crop_center_or_pad(mask, self.outsize[0], self.outsize[1])
-
         img = np.load(elem.slicepath)
         mask = np.load(elem.slicepath[:-4] + '_gt.npy')
+
+        if img.shape != self.outsize:
+           img = self.crop_center_or_pad(img, self.outsize[0], self.outsize[1])
+           mask = self.crop_center_or_pad(mask, self.outsize[0], self.outsize[1])
 
         return img[None, :, :], mask
 

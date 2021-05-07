@@ -1,8 +1,8 @@
-import active_catinous.FastGramDynamicMemoryBrainAge as braincatsmodel
-from active_catinous.FastGramDynamicMemoryBrainAge import FastGramDynamicMemoryBrainAge
+import active_dynamicmemory.FastGramDynamicMemoryBrainAge as braincatsmodel
+from active_dynamicmemory.FastGramDynamicMemoryBrainAge import FastGramDynamicMemoryBrainAge
 from datasets.BrainAgeDataset import BrainAgeDataset
 from datasets.BrainAgeContinuous import BrainAgeContinuous
-import active_catinous.utils as cutils
+import active_dynamicmemory.utils as cutils
 from pytorch_lightning.callbacks import ModelCheckpoint
 from torch.utils.data import DataLoader
 import os

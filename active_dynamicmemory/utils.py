@@ -2,12 +2,8 @@ from pytorch_lightning.utilities.parsing import AttributeDict
 import argparse
 import pandas as pd
 import pytorch_lightning.loggers as pllogging
-from copy import deepcopy
 
 import torch
-from torch import nn
-from torch.nn import functional as F
-from torch.autograd import Variable
 import os
 import hashlib
 import pickle
@@ -15,16 +11,14 @@ import skimage.transform
 import numpy as np
 import pydicom as pyd
 
-import models.AgePredictor as agemodels
-import monai.networks.nets as monaimodels
-from models.unet3d import EncoderModelGenesis
-import torchvision.models as models
+import torch
+import os
+from pytorch_lightning import Trainer
+from active_dynamicmemory.CardiacActiveDynamicMemory import CardiacActiveDynamicMemory
+from active_dynamicmemory.BrainAgeActiveDynamicMemory import BrainAgeActiveDynamicMemory
+import pandas as pd
+import pytorch_lightning.loggers as pllogging
 
-
-LOGGING_FOLDER = '/project/catinous/active_catinous/tensorboard_logs/'
-TRAINED_MODELS_FOLDER = '/project/catinous/active_catinous/trained_models/MELBA/'
-TRAINED_MEMORY_FOLDER = '/project/catinous/active_catinous/trained_memory/MELBA/'
-RESPATH = '/project/catinous/active_catinous/results/MELBA/'
 
 def default_params(dparams, params):
     """Copies all key value pairs from params to dparams if not present"""
@@ -44,18 +38,13 @@ def get_expname(hparams):
     elif type(hparams) is AttributeDict:
         hparams = dict(hparams)
 
-    if hparams['len_perf_queue'] == 5: ##HACKY hack
-        hparams.pop('len_perf_queue')
-
     hashed_params = hash(hparams, length=10)
-
 
     expname = hparams['task']
     expname += '_cont' if hparams['continuous'] else '_batch'
 
     if 'naive_continuous' in hparams:
         expname += '_naive'
-
 
     expname += '_' + os.path.splitext(os.path.basename(hparams['datasetfile']))[0]
     if hparams['base_model']:
@@ -77,8 +66,6 @@ def save_memory_to_csv(memory, savepath):
                              'pseudodomain': [e.domain for e in memory]})
     df_memory.to_csv(savepath, index=False, index_label=False)
 
-def pllogger(hparams):
-    return pllogging.TestTubeLogger(LOGGING_FOLDER, name=get_expname(hparams))
 
 def sort_dict(input_dict):
     dict_out = {}
@@ -95,7 +82,6 @@ def sort_dict(input_dict):
 
 def save_memory_to_csv(memory, savepath):
     df_cache = pd.DataFrame({'filepath':[ci.filepath for ci in memory],
-                             'label': [ci.label.cpu().numpy() for ci in memory],
                              'scanner': [ci.scanner for ci in memory],
                              'pseudo_domain':  [ci.pseudo_domain for ci in memory],
                              'traincounter': [ci.traincounter for ci in memory]})
@@ -267,39 +253,78 @@ def load_box_annotation(elem, cropped_to=None, shiftx_aug=0, shifty_aug=0, valid
 
     return box
 
-def load_model_stylemodel(task: str, droprate, load_stylemodel=True):
-    stylemodel = None
-    gramlayers = None
 
-    if task == 'brainage':
-        model = agemodels.EncoderRegressor(droprate=droprate)
-
-        if load_stylemodel:
-            stylemodel = EncoderModelGenesis()
-            # Load pretrained model genesis
-            weight_dir = 'models/Genesis_Chest_CT.pt'
-            checkpoint = torch.load(weight_dir)
-            state_dict = checkpoint['state_dict']
-            unParalled_state_dict = {}
-            for key in state_dict.keys():
-                if key.startswith('module.down_'):
-                    unParalled_state_dict[key.replace("module.", "")] = state_dict[key]
-            stylemodel.load_state_dict(unParalled_state_dict)
-            gramlayers = [stylemodel.down_tr64.ops[1].conv1]
-            stylemodel.eval()
-    elif task == 'cardiac':
-        model = monaimodels.UNet(dimensions=2, in_channels=1, out_channels=4,
-                                 channels=(16, 32, 64, 128, 256), strides=(2, 2, 2, 2), norm='batch',
-                                 dropout=0.4, num_res_units=2)
-
-        if load_stylemodel:
-            stylemodel = models.resnet50(pretrained=True)
-            stylemodel.conv1 = nn.Conv2d(1, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
-            gramlayers = [stylemodel.layer1[-1].conv1,
-                          stylemodel.layer2[-1].conv1]
-            stylemodel.eval()
+def trained_model(hparams, settings, training=True):
+    if torch.cuda.is_available():
+        device = torch.device('cuda')
     else:
-        raise NotImplementedError(f'model {task} not implemented')
+        device = torch.device('cpu')
+
+    settings = argparse.Namespace(**settings)
+    os.makedirs(settings.TRAINED_MODELS_DIR, exist_ok=True)
+    os.makedirs(settings.TRAINED_MEMORY_DIR, exist_ok=True)
+    os.makedirs(settings.RESULT_DIR, exist_ok=True)
+
+    if hparams['task'] == 'cardiac':
+        model = CardiacActiveDynamicMemory(hparams=hparams, modeldir=settings.TRAINED_MODELS_DIR, device=device, training=training)
+    elif hparams['task'] == 'brainage':
+        model = BrainAgeActiveDynamicMemory(hparams=hparams, modeldir=settings.TRAINED_MODELS_DIR, device=device, training=training)
+
+    exp_name = get_expname(hparams)
+    weights_path = cached_path(hparams, settings.TRAINED_MODELS_DIR)
+
+    if not os.path.exists(weights_path) and training:
+        logger = pllogging.TestTubeLogger(settings.LOGGING_DIR, name=exp_name)
+        trainer = Trainer(gpus=1, max_epochs=1, logger=logger,
+                          val_check_interval=model.hparams.val_check_interval,
+                          gradient_clip_val=model.hparams.gradient_clip_val,
+                          checkpoint_callback=False)
+        trainer.fit(model)
+        model.freeze()
+        torch.save(model.state_dict(), weights_path)
+        if model.hparams.continuous:
+            print('train counter', model.train_counter)
+            print('label counter', model.trainingsmemory.labeling_counter)
+        if model.hparams.continuous and model.hparams.use_memory:
+            save_memory_to_csv(model.trainingsmemory.memorylist, settings.TRAINED_MEMORY_DIR + exp_name + '.csv')
+    elif os.path.exists(settings.TRAINED_MEMORY_DIR + exp_name + '.pt'):
+        print('Read: ' + weights_path)
+        state_dict = torch.load(weights_path)
+        new_state_dict = dict()
+        for k in state_dict.keys():
+            if k.startswith('model.'):
+                new_state_dict[k.replace("model.", "", 1)] = state_dict[k]
+        model.model.load_state_dict(new_state_dict)
+        model.freeze()
+    else:
+        print(weights_path, 'does not exist')
+        model = None
+        return model, None, None, exp_name + '.pt'
+
+    if model.hparams.continuous and model.hparams.use_memory:
+        if os.path.exists(settings.TRAINED_MEMORY_DIR + exp_name + '.csv'):
+            df_memory = pd.read_csv(settings.TRAINED_MEMORY_DIR + exp_name + '.csv')
+        else:
+            df_memory = None
+    else:
+        df_memory=None
+
+    # always get the last version
+    try:
+        max_version = max([int(x.split('_')[1]) for x in os.listdir(settings.LOGGING_DIR + exp_name)])
+        logs = pd.read_csv(settings.LOGGING_DIR + exp_name + '/version_{}/metrics.csv'.format(max_version))
+    except Exception as e:
+        print(e)
+        logs = None
+
+    return model, logs, df_memory, exp_name +'.pt'
 
 
-    return model, stylemodel, gramlayers
+def is_cached(hparams, trained_dir):
+    exp_name = get_expname(hparams)
+    return os.path.exists(trained_dir + exp_name + '.pt')
+
+
+def cached_path(hparams, trained_dir):
+    exp_name = get_expname(hparams)
+    return trained_dir + exp_name + '.pt'
