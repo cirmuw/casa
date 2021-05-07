@@ -1,23 +1,7 @@
-import argparse
-import os
-from pprint import pprint
-import numpy as np
-
-import pandas as pd
-import pytorch_lightning as pl
-import pytorch_lightning.loggers as pllogging
 import torch
 import torch.nn as nn
-from pytorch_lightning import Trainer
-from torch.utils.data import DataLoader
-from datasets.ContinuousDataset import BrainAgeContinuous, CardiacContinuous
-from datasets.BatchDataset import BrainAgeBatch, CardiacBatch
-import monai.networks.utils as mutils
-
-from . import utils
-
-from active_dynamicmemory.ActiveDynamicMemory import NaiveDynamicMemory, CasaDynamicMemory, UncertaintyDynamicMemory
-from active_dynamicmemory.ActiveDynamicMemory import MemoryItem
+from datasets.ContinuousDataset import BrainAgeContinuous
+from datasets.BatchDataset import BrainAgeBatch
 from active_dynamicmemory.ActiveDynamicMemoryModel import ActiveDynamicMemoryModel
 import models.AgePredictor as agemodels
 from models.unet3d import EncoderModelGenesis
@@ -33,13 +17,8 @@ class BrainAgeActiveDynamicMemory(ActiveDynamicMemoryModel):
         self.TaskDatasetContinuous = BrainAgeContinuous
 
         self.mae = nn.L1Loss()
+        self.loss = nn.MSELoss()
 
-    def get_loss(self):
-        """
-        Loads the task loss for brain age estimation (MSE)
-        :return: MSE error
-        """
-        return nn.MSELoss()
 
     def get_task_metric(self, image, target):
         """
@@ -107,3 +86,21 @@ class BrainAgeActiveDynamicMemory(ActiveDynamicMemoryModel):
         res = res[0]
         self.log_dict({f'val_loss_{res}': self.loss(y_hat, y),
                    f'val_mae_{res}': self.mae(y_hat, y)})
+
+    def get_task_loss(self, xs, ys):
+        if type(xs) is list:
+            loss = None
+            for i, x in enumerate(xs):
+                y = ys[i]
+
+                x = x.to(self.device)
+                y_hat = self.forward(x.float())
+                if loss is None:
+                    loss = self.loss(y_hat, y)
+                else:
+                    loss += self.loss(y_hat, y)
+        else:
+            y_hat = self.forward(xs.float())
+            loss = self.loss(y_hat, ys)
+
+        return loss

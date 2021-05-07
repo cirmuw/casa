@@ -328,3 +328,6 @@ def is_cached(hparams, trained_dir):
 def cached_path(hparams, trained_dir):
     exp_name = get_expname(hparams)
     return trained_dir + exp_name + '.pt'
+
+def collate_fn(batch):
+    return tuple(zip(*batch))

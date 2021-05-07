@@ -43,8 +43,6 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
                 new_state_dict[key.replace('model.', '', 1)] = state_dict[key]
             self.model.load_state_dict(new_state_dict)
 
-        self.loss = self.get_loss()
-
         # Initilize checkpoints to calculate BWT, FWT after training
         self.scanner_checkpoints = dict()
         self.scanner_checkpoints[self.hparams.order[0]] = True
@@ -197,33 +195,17 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
             train_a_step = self.insert_element(x, y, filepath, scanner)
 
             if train_a_step:
-                xs, ys = self.trainingsmemory.get_training_batch(self.hparams.batch_size,
+                x, y = self.trainingsmemory.get_training_batch(self.hparams.batch_size,
                                                                  batches=int(
                                                                      self.hparams.training_batch_size / self.hparams.batch_size))
-
-                loss = None
-                for i, x in enumerate(xs):
-                    y = ys[i]
-
-                    x = x.to(self.device)
-                    y = torch.stack(y).to(self.device)
-                    y_hat = self.model(x.float())
-                    if loss is None:
-                        loss = self.loss(y_hat, y)
-                    else:
-                        loss += self.loss(y_hat, y)
-
                 self.train_counter += 1
-                self.log('train_loss', loss)
-                return loss
             else:
                 return None
 
-        else:
-            y_hat = self.forward(x.float())
-            loss = self.loss(y_hat, y)
-            self.log('train_loss', loss)
-            return loss
+        loss = self.get_task_loss(x, y)
+        self.log('train_log', loss)
+        self.grammatrices = []
+        return loss
 
     def forward(self, x):
         return self.model(x)
@@ -280,15 +262,14 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
     def load_model_stylemodel(self, droprate, load_stylemodel=False):
         pass
 
-
     @abstractmethod
     def get_task_metric(self, image, target):
         pass
 
     @abstractmethod
-    def get_loss(self):
+    def completed_domain(self, m):
         pass
 
     @abstractmethod
-    def completed_domain(self, m):
+    def get_task_loss(self, x, y):
         pass

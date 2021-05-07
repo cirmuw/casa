@@ -1,26 +1,11 @@
-import argparse
-import os
-from pprint import pprint
-import numpy as np
-
-import pandas as pd
-import pytorch_lightning as pl
-import pytorch_lightning.loggers as pllogging
 import torch
 import torch.nn as nn
-from pytorch_lightning import Trainer
-from torch.utils.data import DataLoader
-from datasets.ContinuousDataset import BrainAgeContinuous, CardiacContinuous
-from datasets.BatchDataset import BrainAgeBatch, CardiacBatch
+from datasets.ContinuousDataset import CardiacContinuous
+from datasets.BatchDataset import CardiacBatch
 from monai.metrics import DiceMetric
 import monai.networks.utils as mutils
 
-from . import utils
-
-from active_dynamicmemory.ActiveDynamicMemory import NaiveDynamicMemory, CasaDynamicMemory, UncertaintyDynamicMemory
-from active_dynamicmemory.ActiveDynamicMemory import MemoryItem
 from active_dynamicmemory.ActiveDynamicMemoryModel import ActiveDynamicMemoryModel
-from abc import ABC, abstractmethod
 import monai.networks.nets as monaimodels
 import torchvision.models as models
 
@@ -33,6 +18,7 @@ class CardiacActiveDynamicMemory(ActiveDynamicMemoryModel):
         self.collate_fn = None
         self.TaskDatasetBatch = CardiacBatch
         self.TaskDatasetContinuous = CardiacContinuous
+        self.loss = nn.CrossEntropyLoss()
 
     def load_model_stylemodel(self, droprate, load_stylemodel=False):
         """
@@ -78,13 +64,6 @@ class CardiacActiveDynamicMemory(ActiveDynamicMemoryModel):
         self.train()
         return dice.detach().cpu().numpy()
 
-    def get_loss(self):
-        """
-        Loads the task loss for cardiac segementation
-        :return: CrossEntropyLoss
-        """
-        return nn.CrossEntropyLoss()
-
     def completed_domain(self, m):
         """
         Domain is completed if m larger than a threshold
@@ -121,3 +100,22 @@ class CardiacActiveDynamicMemory(ActiveDynamicMemoryModel):
                        f'val_dice_lv_{res}': dice[0],
                        f'val_dice_myo_{res}': dice[1],
                        f'val_dice_rv_{res}': dice[2]})
+
+
+    def get_task_loss(self, xs, ys):
+        if type(xs) is list:
+            loss = None
+            for i, x in enumerate(xs):
+                y = ys[i]
+
+                x = x.to(self.device)
+                y_hat = self.forward(x.float())
+                if loss is None:
+                    loss = self.loss(y_hat, y)
+                else:
+                    loss += self.loss(y_hat, y)
+        else:
+            y_hat = self.forward(xs.float())
+            loss = self.loss(y_hat, ys)
+
+        return loss

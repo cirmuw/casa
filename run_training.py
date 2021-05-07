@@ -15,7 +15,7 @@ def train_config(configfile, remote=False):
     else:
         model, logs, df_mem, exp_name = autils.trained_model(params['trainparams'], params['settings'])
 
-    print('successfully trained model', exp_name)
+        print('successfully trained model', exp_name)
 
 if __name__ == "__main__":
     # execute only if run as a script
