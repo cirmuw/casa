@@ -30,3 +30,4 @@ trainparams:
     allowedlabelratio: 0
     len_perf_queue: 8
     dim: 2
+    seed: 1

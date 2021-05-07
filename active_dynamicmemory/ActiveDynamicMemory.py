@@ -255,7 +255,7 @@ class CasaDynamicMemory(DynamicMemory):
                     self.domaincounter[domain] += 1
                 self.memorylist[idx] = item
                 self.labeling_counter += 1
-                self.domainMetric[domain].append(model.get_task_error(item.img, item.target))
+                self.domainMetric[domain].append(model.get_task_metric(item.img, item.target))
 
                 # add tree to clf of domain
                 clf = self.isoforests[domain]

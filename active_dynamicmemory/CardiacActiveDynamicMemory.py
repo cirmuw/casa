@@ -13,12 +13,11 @@ class CardiacActiveDynamicMemory(ActiveDynamicMemoryModel):
 
     def __init__(self, hparams={}, modeldir=None, device=torch.device('cpu'), training=True):
         super(ActiveDynamicMemoryModel, self).__init__()
-        self.init(hparams=hparams, modeldir=modeldir, device=device, training=training)
-
         self.collate_fn = None
         self.TaskDatasetBatch = CardiacBatch
         self.TaskDatasetContinuous = CardiacContinuous
         self.loss = nn.CrossEntropyLoss()
+        self.init(hparams=hparams, modeldir=modeldir, device=device, training=training)
 
     def load_model_stylemodel(self, droprate, load_stylemodel=False):
         """
@@ -108,6 +107,7 @@ class CardiacActiveDynamicMemory(ActiveDynamicMemoryModel):
             for i, x in enumerate(xs):
                 y = ys[i]
 
+                y = torch.stack(y).to(self.device)
                 x = x.to(self.device)
                 y_hat = self.forward(x.float())
                 if loss is None:
@@ -115,6 +115,8 @@ class CardiacActiveDynamicMemory(ActiveDynamicMemoryModel):
                 else:
                     loss += self.loss(y_hat, y)
         else:
+            if type(ys) is list:
+                ys = torch.stack(ys).to(self.device)
             y_hat = self.forward(xs.float())
             loss = self.loss(y_hat, ys)
 

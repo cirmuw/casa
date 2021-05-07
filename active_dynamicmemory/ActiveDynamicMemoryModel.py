@@ -37,10 +37,11 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
 
 
         if not self.hparams.base_model is None and training:
-            state_dict =  torch.load(os.path.join(utils.TRAINED_MODELS_FOLDER, self.hparams.base_model))
+            state_dict =  torch.load(os.path.join(modeldir, self.hparams.base_model))
             new_state_dict = {}
             for key in state_dict.keys():
-                new_state_dict[key.replace('model.', '', 1)] = state_dict[key]
+                if key.startswith('model.'):
+                    new_state_dict[key.replace('model.', '', 1)] = state_dict[key]
             self.model.load_state_dict(new_state_dict)
 
         # Initilize checkpoints to calculate BWT, FWT after training
@@ -89,7 +90,7 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
             self.insert_element = self.insert_element_uncertainty
 
     def getmemoryitems_from_base(self, num_items=128):
-        dl = DataLoader(self.TaskDataset(self.hparams.datasetfile,
+        dl = DataLoader(self.TaskDatasetBatch(self.hparams.datasetfile,
                                             iterations=None,
                                             batch_size=self.hparams.batch_size,
                                             split=['base']),

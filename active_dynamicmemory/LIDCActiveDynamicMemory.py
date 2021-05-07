@@ -12,14 +12,13 @@ class BrainAgeActiveDynamicMemory(ActiveDynamicMemoryModel):
 
     def __init__(self, hparams={}, modeldir=None, device=torch.device('cpu'), training=True):
         super(ActiveDynamicMemoryModel, self).__init__()
-        self.init(hparams=hparams, modeldir=modeldir, device=device, training=training)
-
         self.TaskDatasetBatch = LIDCBatch
         self.TaskDatasetContinuous = LIDCContinuous
 
         self.mae = nn.L1Loss()
         self.loss = nn.MSELoss()
         self.collate_fn = autils.collate_fn
+        self.init(hparams=hparams, modeldir=modeldir, device=device, training=training)
 
     def get_task_metric(self, image, target):
         """
