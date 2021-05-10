@@ -106,9 +106,9 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
             _ = self.stylemodel(xstyle)
 
             for i, f in enumerate(filepath):
+                grammatrix = [bg[i].detach().cpu().numpy().flatten() for bg in self.grammatrices]
                 memoryitems.append(MemoryItem(x[i].detach().cpu(), y[i], f, scanner[i],
-                                              current_grammatrix=self.grammatrices[0][
-                                                  i].detach().cpu().numpy().flatten(),
+                                              current_grammatrix=grammatrix[0],
                                               pseudo_domain=0))
 
             if len(memoryitems) >= num_items:
@@ -162,7 +162,6 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
                 if not v:
                     if len(self.trainingsmemory.domainMetric[k]) == self.hparams.len_perf_queue:
                         mean_metric = np.mean(self.trainingsmemory.domainMetric[k])
-                        print(k, self.trainingsmemory.domainMetric[k])
                         if self.completed_domain(mean_metric):
                             self.trainingsmemory.domaincomplete[k] = True
             return True
@@ -217,45 +216,27 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
 
     def train_dataloader(self):
         if self.hparams.continuous:
-            if self.hparams.task == 'brainage':
-                return DataLoader(BrainAgeContinuous(self.hparams.datasetfile,
-                                                                   transition_phase_after=self.hparams.transition_phase_after,
-                                                     seed=self.hparams.seed,
-                                                 order=self.hparams.order),
-                                  batch_size=self.hparams.batch_size, num_workers=8, drop_last=True)
-            elif self.hparams.task == 'cardiac':
-                return DataLoader(CardiacContinuous(self.hparams.datasetfile,
-                                                 transition_phase_after=self.hparams.transition_phase_after,
-                                                    seed=self.hparams.seed,
-                                                 order=self.hparams.order),
-                                  batch_size=self.hparams.batch_size, num_workers=8, drop_last=True)
+            return DataLoader(self.TaskDatasetContinuous(self.hparams.datasetfile,
+                                                         transition_phase_after=self.hparams.transition_phase_after,
+                                                         seed=self.hparams.seed,
+                                                         order=self.hparams.order),
+                              batch_size=self.hparams.batch_size, num_workers=8, drop_last=True,
+                              collate_fn=self.collate_fn)
         else:
-            if self.hparams.task == 'brainage':
-                return DataLoader(BrainAgeBatch(self.hparams.datasetfile,
-                                                  iterations=self.hparams.noncontinuous_steps,
-                                                  batch_size=self.hparams.batch_size,
-                                                  split=self.hparams.noncontinuous_train_splits),
-                                  batch_size=self.hparams.batch_size, num_workers=8)
-            elif self.hparams.task == 'cardiac':
-                return DataLoader(CardiacBatch(self.hparams.datasetfile,
-                                                  iterations=self.hparams.noncontinuous_steps,
-                                                  batch_size=self.hparams.batch_size,
-                                                  split=self.hparams.noncontinuous_train_splits,
-                                                  res=self.hparams.scanner),
-                                  batch_size=self.hparams.batch_size, num_workers=8)
+            return DataLoader(self.TaskDatasetBatch(self.hparams.datasetfile,
+                                                    iterations=self.hparams.noncontinuous_steps,
+                                                    batch_size=self.hparams.batch_size,
+                                                    split=self.hparams.noncontinuous_train_splits,
+                                                    res=self.hparams.scanner),
+                              batch_size=self.hparams.batch_size, num_workers=8, collate_fn=self.collate_fn)
 
     #@pl.data_loader
     def val_dataloader(self):
-        if self.hparams.task == 'brainage':
-            return DataLoader(BrainAgeBatch(self.hparams.datasetfile,
-                                          split='val'),
+        return DataLoader(self.TaskDatasetBatch(self.hparams.datasetfile,
+                                                split='val', res=self.hparams.order),
                           batch_size=4,
-                          num_workers=1)
-        elif self.hparams.task == 'cardiac':
-            return DataLoader(CardiacBatch(self.hparams.datasetfile,
-                                          split=['val']),
-                          batch_size=4,
-                          num_workers=1)
+                          num_workers=2,
+                          collate_fn=self.collate_fn)
 
 
 

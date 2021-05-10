@@ -19,8 +19,6 @@ class BrainAgeActiveDynamicMemory(ActiveDynamicMemoryModel):
         self.init(hparams=hparams, modeldir=modeldir, device=device, training=training)
 
 
-
-
     def get_task_metric(self, image, target):
         """
         Task metric for brain age estimation is the absolute error

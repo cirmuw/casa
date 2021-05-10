@@ -5,10 +5,10 @@ from datasets.BatchDataset import LIDCBatch
 from active_dynamicmemory.ActiveDynamicMemoryModel import ActiveDynamicMemoryModel
 import torchvision.models as models
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
-import active_dynamicmemory.utils as autils
+import active_dynamicmemory.LIDCutils as lutils
 import numpy as np
 
-class BrainAgeActiveDynamicMemory(ActiveDynamicMemoryModel):
+class LIDCActiveDynamicMemory(ActiveDynamicMemoryModel):
 
     def __init__(self, hparams={}, modeldir=None, device=torch.device('cpu'), training=True):
         super(ActiveDynamicMemoryModel, self).__init__()
@@ -17,8 +17,11 @@ class BrainAgeActiveDynamicMemory(ActiveDynamicMemoryModel):
 
         self.mae = nn.L1Loss()
         self.loss = nn.MSELoss()
-        self.collate_fn = autils.collate_fn
+
+        self.collate_fn = lutils.collate_fn
+
         self.init(hparams=hparams, modeldir=modeldir, device=device, training=training)
+
 
     def get_task_metric(self, image, target):
         """
@@ -32,7 +35,7 @@ class BrainAgeActiveDynamicMemory(ActiveDynamicMemoryModel):
         out = self.model(image)
 
         out_boxes = [
-            autils.filter_boxes_area(out[i]['boxes'].cpu().detach().numpy(), out[i]['scores'].cpu().detach().numpy())
+            lutils.filter_boxes_area(out[i]['boxes'].cpu().detach().numpy(), out[i]['scores'].cpu().detach().numpy())
             for i in range(len(out))]
 
         boxes_np = [b[0] for b in out_boxes]
@@ -41,14 +44,14 @@ class BrainAgeActiveDynamicMemory(ActiveDynamicMemoryModel):
         final_boxes = []
         final_scores = []
         for i, box_np in enumerate(boxes_np):
-            fb, fs = autils.correct_boxes(box_np, scores_np[i])
+            fb, fs = lutils.correct_boxes(box_np, scores_np[i])
             final_boxes.append(fb)
             final_scores.append(fs)
 
         ious = []
         for t in target:
             for b in final_boxes[0]:
-                ious.append(autils.bb_intersection_over_union(t, b))
+                ious.append(lutils.bb_intersection_over_union(t, b))
         self.train()
         return np.array(ious).mean()
 
@@ -92,7 +95,7 @@ class BrainAgeActiveDynamicMemory(ActiveDynamicMemoryModel):
         out = self.model(images)
 
         out_boxes = [
-            autils.filter_boxes_area(out[i]['boxes'].cpu().detach().numpy(), out[i]['scores'].cpu().detach().numpy())
+            lutils.filter_boxes_area(out[i]['boxes'].cpu().detach().numpy(), out[i]['scores'].cpu().detach().numpy())
             for i in range(len(out))]
 
         boxes_np = [b[0] for b in out_boxes]
@@ -100,8 +103,9 @@ class BrainAgeActiveDynamicMemory(ActiveDynamicMemoryModel):
 
         final_boxes = []
         final_scores = []
+
         for i, box_np in enumerate(boxes_np):
-            fb, fs = autils.correct_boxes(box_np, scores_np[i])
+            fb, fs = lutils.correct_boxes(box_np, scores_np[i])
             final_boxes.append(fb)
             final_scores.append(fs)
 
@@ -157,7 +161,7 @@ class BrainAgeActiveDynamicMemory(ActiveDynamicMemoryModel):
                                 boxes_count += 1
                                 det_gt = False
                                 for m, singleg in enumerate(g):
-                                    if autils.bb_intersection_over_union(singleg, b) > iou_thres:
+                                    if lutils.bb_intersection_over_union(singleg, b) > iou_thres:
                                         detected[m] = True
                                         det_gt = True
                                 if not det_gt:
@@ -208,3 +212,6 @@ class BrainAgeActiveDynamicMemory(ActiveDynamicMemoryModel):
         loss = sum(l for l in loss_dict.values())
 
         return loss
+
+    def forward_lidc(self, x, y):
+        return self.model(x, y)

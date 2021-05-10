@@ -135,6 +135,7 @@ class CasaDynamicMemory(DynamicMemory):
                 mi.current_grammatrix = self.transformer.transform(mi.current_grammatrix.reshape(1, -1))
             trans_initelements = self.transformer.transform(graminits)
         else:
+            print('no transform')
             self.transformer = None
             trans_initelements = graminits
 
