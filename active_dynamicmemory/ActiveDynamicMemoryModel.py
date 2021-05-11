@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 from datasets.ContinuousDataset import BrainAgeContinuous, CardiacContinuous
 from datasets.BatchDataset import BrainAgeBatch, CardiacBatch
 from . import utils
+import torch.nn as nn
 
 from active_dynamicmemory.ActiveDynamicMemory import NaiveDynamicMemory, CasaDynamicMemory, UncertaintyDynamicMemory
 from active_dynamicmemory.ActiveDynamicMemory import MemoryItem
@@ -84,8 +85,7 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
             self.trainingsmemory = UncertaintyDynamicMemory(initelements=initelements,
                                                       memorymaximum=self.hparams.memorymaximum,
                                                       seed=self.hparams.seed,
-                                                      perf_queue_len=self.hparams.len_perf_queue,
-                                                      droprate=self.hparams.uncertainty_droprate)
+                                                      uncertainty_threshold=self.hparams.uncertainty_threshold)
 
             self.insert_element = self.insert_element_uncertainty
 
@@ -102,7 +102,10 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
 
             x, y, scanner, filepath = batch
             x = x.to(self.device)
-            xstyle = torch.cat([x, x, x], dim=1)
+            if self.hparams.dim==2:
+                xstyle = torch.cat([x, x, x], dim=1)
+            else:
+                xstyle = x
             _ = self.stylemodel(xstyle)
 
             for i, f in enumerate(filepath):
@@ -136,7 +139,7 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
         return len(self.trainingsmemory.forceitems)!=0
 
 
-    # This is called when hparams.method == 'style'
+    # This is called when hparams.method == 'casa'
     def insert_element_casa(self, x, y, filepath, scanner):
         budget_before = self.budget
 
@@ -168,6 +171,29 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
         else:
             return False
 
+    # This is called when hparams.method == 'uncertainty'
+    def insert_element_uncertainty(self, x, y, filepath, scanner):
+        budget_before = self.budget
+
+        self.freeze()
+
+        for p in self.modules():
+            if isinstance(p, nn.Dropout):
+                p.train()
+        uncertainties = self.get_uncertainties(x)
+        self.unfreeze()
+
+        for i, img in enumerate(x):
+            grammatrix = [bg[i].detach().cpu().numpy().flatten() for bg in self.grammatrices]
+            new_mi = MemoryItem(img.detach().cpu(), y[i].detach().cpu(), filepath[i], scanner[i], grammatrix[0])
+            self.budget = self.trainingsmemory.insert_element(new_mi, uncertainties[i], self.budget, self)
+
+        if budget_before == self.budget:
+            self.budgetchangecounter += 1
+        else:
+            self.budgetchangecounter = 1
+
+        return self.budgetchangecounter < 5
 
     def training_step(self, batch, batch_idx):
         x, y, scanner, filepath = batch
@@ -190,7 +216,10 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
         if self.hparams.use_memory:
             #y = y[:, None]
             self.grammatrices = []
-            xstyle = torch.cat([x, x, x], dim=1)
+            if self.hparams.dim == 2:
+                xstyle = torch.cat([x, x, x], dim=1)
+            else:
+                xstyle = x
             _ = self.stylemodel(xstyle)
 
             train_a_step = self.insert_element(x, y, filepath, scanner)
@@ -255,4 +284,8 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
 
     @abstractmethod
     def get_task_loss(self, x, y):
+        pass
+
+    @abstractmethod
+    def get_uncertainties(self, x):
         pass

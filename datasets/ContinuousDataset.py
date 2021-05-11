@@ -77,7 +77,7 @@ class BrainAgeContinuous(ContinuousDataset):
         img = mut.norm01(img)
         img = img[None, :, :, :]
 
-        return torch.tensor(img).float(), torch.tensor(self.df.iloc[index].Age).float(), self.df.iloc[index].Image, self.df.iloc[index].Scanner
+        return torch.tensor(img).float(), torch.tensor(self.df.iloc[index].Age).float(), self.df.iloc[index].scanner, self.df.iloc[index].Image
 
 class LIDCContinuous(ContinuousDataset):
 

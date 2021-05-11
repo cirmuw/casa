@@ -51,7 +51,7 @@ class DynamicMemory(ABC):
             bs = batchsize
             if len(imgshape) == 3:
                 x = torch.empty(size=(batchsize, imgshape[0], imgshape[1], imgshape[2]))
-            elif len(imgshape) == 3:
+            elif len(imgshape) == 4:
                 x = torch.empty(size=(batchsize, imgshape[0], imgshape[1], imgshape[2], imgshape[3]))
 
             y = list()
@@ -302,5 +302,34 @@ class CasaDynamicMemory(DynamicMemory):
 
 
 class UncertaintyDynamicMemory(DynamicMemory):
-    pass
+
+    def __init__(self, initelements, **kwargs):
+        super(UncertaintyDynamicMemory, self).__init__(initelements, **kwargs)
+        self.uncertainty_threshold = kwargs['uncertainty_threshold']
+        self.forceitems = []
+
+    def insert_element(self, item, uncertainty, budget, model):
+        if budget>0 and uncertainty>self.uncertainty_threshold:
+            if len(self.memorylist)<self.memorymaximum:
+                self.memorylist.append(item)
+                self.forceitems.append(item)
+                self.labeling_counter += 1
+                budget-=1
+            else:
+                assert (item.current_grammatrix is not None)
+                insertidx = -1
+                mingramloss = 1000
+                for j, mi in enumerate(self.memorylist):
+                    loss = F.mse_loss(torch.tensor(item.current_grammatrix), torch.tensor(mi.current_grammatrix),
+                                      reduction='mean')
+
+                    if loss < mingramloss:
+                        mingramloss = loss
+                        insertidx = j
+                self.memorylist[insertidx] = item
+                self.forceitems.append(item)
+                self.labeling_counter += 1
+                budget-=1
+
+        return budget
 

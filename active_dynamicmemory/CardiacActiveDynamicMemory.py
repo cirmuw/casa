@@ -8,6 +8,7 @@ import monai.networks.utils as mutils
 from active_dynamicmemory.ActiveDynamicMemoryModel import ActiveDynamicMemoryModel
 import monai.networks.nets as monaimodels
 import torchvision.models as models
+import numpy as np
 
 class CardiacActiveDynamicMemory(ActiveDynamicMemoryModel):
 
@@ -121,3 +122,19 @@ class CardiacActiveDynamicMemory(ActiveDynamicMemoryModel):
             loss = self.loss(y_hat, ys)
 
         return loss
+
+    def get_uncertainties(self, x):
+        y_hat_flats = []
+        uncertainties = []
+
+        for i in range(self.hparams.uncertainty_iterations):
+            outy = self.forward(x)
+            y_hat_flat = torch.argmax(outy, dim=1)[:, None, :, :]
+            y_hat_flats.append(y_hat_flat)
+
+        for i in range(len(x)):
+            y_hat_detach = [t.detach().cpu().numpy() for t in y_hat_flats]
+            uncertainties.append(np.array(y_hat_detach).std(axis=0)[i].mean())
+
+        return uncertainties
+

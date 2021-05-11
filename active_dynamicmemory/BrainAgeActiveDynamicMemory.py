@@ -5,6 +5,7 @@ from datasets.BatchDataset import BrainAgeBatch
 from active_dynamicmemory.ActiveDynamicMemoryModel import ActiveDynamicMemoryModel
 import models.AgePredictor as agemodels
 from models.unet3d import EncoderModelGenesis
+import numpy as np
 
 class BrainAgeActiveDynamicMemory(ActiveDynamicMemoryModel):
 
@@ -93,6 +94,7 @@ class BrainAgeActiveDynamicMemory(ActiveDynamicMemoryModel):
                 y = ys[i]
 
                 x = x.to(self.device)
+                y = torch.tensor(y).to(self.device)
                 y_hat = self.forward(x.float())
                 if loss is None:
                     loss = self.loss(y_hat, y)
@@ -103,3 +105,12 @@ class BrainAgeActiveDynamicMemory(ActiveDynamicMemoryModel):
             loss = self.loss(y_hat, ys)
 
         return loss
+
+    def get_uncertainties(self, x):
+        output = []
+
+        for i in range(self.hparams.uncertainty_iterations):
+            outy = self.forward(x)
+            output.append([o[0] for o in outy.detach().cpu().numpy()])
+
+        return np.array(output).std(axis=0)

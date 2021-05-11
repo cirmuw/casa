@@ -15,9 +15,6 @@ class LIDCActiveDynamicMemory(ActiveDynamicMemoryModel):
         self.TaskDatasetBatch = LIDCBatch
         self.TaskDatasetContinuous = LIDCContinuous
 
-        self.mae = nn.L1Loss()
-        self.loss = nn.MSELoss()
-
         self.collate_fn = lutils.collate_fn
 
         self.init(hparams=hparams, modeldir=modeldir, device=device, training=training)
