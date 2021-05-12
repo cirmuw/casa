@@ -144,7 +144,15 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
     def insert_element_naive(self, x, y, filepath, scanner):
         for i, img in enumerate(x):
             grammatrix = [bg[i].detach().cpu().numpy().flatten() for bg in self.grammatrices]
-            new_mi = MemoryItem(img.detach().cpu(), y[i].detach().cpu(), filepath[i], scanner[i], grammatrix[0])
+            target = y[i]
+            if type(target) == torch.Tensor:
+                det_target = target.detach().cpu()
+            else:
+                det_target = {}
+                for k, v in target.items():
+                    det_target[k] = v.detach().cpu()
+
+            new_mi = MemoryItem(img.detach().cpu(), det_target, filepath[i], scanner[i], grammatrix[0])
             self.trainingsmemory.insert_element(new_mi)
 
         return len(self.trainingsmemory.forceitems)!=0
@@ -219,8 +227,7 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
     def training_step(self, batch, batch_idx):
         x, y, scanner, filepath = batch
 
-        if type(x) is list or type(x) is tuple:
-            x = torch.stack(x)
+
 
         self.grammatrices = []
 
@@ -244,6 +251,8 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
             if x.size()[1] == 1:
                 print(x)
                 xstyle = torch.cat([x, x, x], dim=1)
+            elif type(x) is list or type(x) is tuple:
+                xstyle = torch.stack(x)
             else:
                 xstyle = x
             _ = self.stylemodel(xstyle)
@@ -259,7 +268,7 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
                 return None
 
         loss = self.get_task_loss(x, y)
-        self.log('train_log', loss)
+        self.log('train_loss', loss)
         self.grammatrices = []
         return loss
 

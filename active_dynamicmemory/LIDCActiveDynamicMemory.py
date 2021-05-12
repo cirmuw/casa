@@ -223,8 +223,7 @@ class LIDCActiveDynamicMemory(ActiveDynamicMemoryModel):
             x = list(i.to(self.device) for i in xs)
             targets = [{k: v.to(self.device) for k, v in t.items()} for t in ys]
             loss_dict = self.forward_lidc(x, targets)
-            if loss is None:
-                loss = sum(l for l in loss_dict.values())
+            loss = sum(l for l in loss_dict.values())
 
         return loss
 
