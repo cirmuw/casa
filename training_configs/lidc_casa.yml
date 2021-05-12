@@ -5,21 +5,22 @@ settings:
     RESULT_DIR: '/project/catinous/active_catinous/MELBA/output/results/'
 
 trainparams:
-    task: 'brainage'
     method: 'casa'
-    startbudget: 378
+    task: 'lidc'
+    startbudget: 177
     outlier_distance: 0.08
     continuous: True
     use_memory: True
     random_cache: True
     transformgrams: False
-    datasetfile: '/project/catinous/brainds_split_val_test_melba.csv'
+    datasetfile: '/project/catinous/lungnodulesfinallndbBig.csv'
     transition_phase_after: 0.8
-    batch_size: 2
-    training_batch_size: 4
-    order: ['1.5T Philips', '1.5T', '3.0T Philips', '3.0T']
+    batch_size: 4
+    training_batch_size: 8
+    order: ['ges', 'geb', 'sie', 'lndb']
     scanner: null
-    base_model: 'brainage_batch_brainds_split_val_test_melba_base_1_81207b7536.pt'
+    base_model: 'lidc_batch_lungnodulesfinallndbBig_base_1_4e8934473e.pt'
+    run_postfix: 1
     val_check_interval: 10
     memorymaximum: 64
     completion_limit: 0.75
@@ -28,6 +29,5 @@ trainparams:
     gradient_clip_val: 0.5
     allowedlabelratio: 0
     len_perf_queue: 8
-    dim: 3
-    run_postfix: 1
+    dim: 2
     seed: 1

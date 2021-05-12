@@ -1,6 +1,7 @@
 import numpy as np
 import SimpleITK as sitk
 import torch
+import torch.nn as nn
 
 def collate_fn(batch):
     return tuple(zip(*batch))
@@ -117,4 +118,11 @@ def load_annotation(self, elem, shiftx_aug=0, shifty_aug=0, ):
             box[j + 1, 3] = y2s[j]
 
     return box
+
+def add_dropout_to_seq(sequential, droprate=0.4):
+    ls = []
+    for l in sequential:
+        ls.append(l)
+        ls.append(nn.Dropout(droprate, inplace=True))
+    return nn.Sequential(*ls)
 

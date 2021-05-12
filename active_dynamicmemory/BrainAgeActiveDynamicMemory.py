@@ -81,7 +81,7 @@ class BrainAgeActiveDynamicMemory(ActiveDynamicMemoryModel):
         x, y, res, img = batch
         self.grammatrices = []
 
-        y_hat = self.forward(x.float())
+        y_hat = self.forward(x.float())[:, 0]
 
         res = res[0]
         self.log_dict({f'val_loss_{res}': self.loss(y_hat, y),
@@ -95,13 +95,13 @@ class BrainAgeActiveDynamicMemory(ActiveDynamicMemoryModel):
 
                 x = x.to(self.device)
                 y = torch.tensor(y).to(self.device)
-                y_hat = self.forward(x.float())
+                y_hat = self.forward(x.float())[:, 0]
                 if loss is None:
                     loss = self.loss(y_hat, y)
                 else:
                     loss += self.loss(y_hat, y)
         else:
-            y_hat = self.forward(xs.float())
+            y_hat = self.forward(xs.float())[:, 0]
             loss = self.loss(y_hat, ys)
 
         return loss

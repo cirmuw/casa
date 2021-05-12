@@ -29,7 +29,7 @@ class LIDCActiveDynamicMemory(ActiveDynamicMemoryModel):
         """
         self.eval()
 
-        out = self.model(image)
+        out = self.model(image[None, :, :].to(self.device))
 
         out_boxes = [
             lutils.filter_boxes_area(out[i]['boxes'].cpu().detach().numpy(), out[i]['scores'].cpu().detach().numpy())
@@ -65,6 +65,12 @@ class LIDCActiveDynamicMemory(ActiveDynamicMemoryModel):
         model = models.detection.fasterrcnn_resnet50_fpn(pretrained=True)
         in_features = model.roi_heads.box_predictor.cls_score.in_features
         model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
+
+        if droprate!=0.0:
+            model.backbone.body.layer1 = lutils.add_dropout_to_seq(model.backbone.body.layer1)
+            model.backbone.body.layer2 = lutils.add_dropout_to_seq(model.backbone.body.layer2)
+            model.backbone.body.layer3 = lutils.add_dropout_to_seq(model.backbone.body.layer3)
+            model.backbone.body.layer4 = lutils.add_dropout_to_seq(model.backbone.body.layer4)
 
         if load_stylemodel:
             stylemodel = models.resnet50(pretrained=True)
@@ -202,13 +208,28 @@ class LIDCActiveDynamicMemory(ActiveDynamicMemoryModel):
             self.log(f'val_ap_{scanner}', aps[scanner])
 
     def get_task_loss(self, xs, ys):
+        loss = None
 
-        x = list(i.to(self.device) for i in xs)
-        targets = [{k: v.to(self.device) for k, v in t.items()} for t in ys]
-        loss_dict = self.forward_lidc(x, targets)
-        loss = sum(l for l in loss_dict.values())
+        if type(xs) is list:
+            for _xs, _ys in zip(xs, ys):
+                x = list(i.to(self.device) for i in _xs)
+                targets = [{k: v.to(self.device) for k, v in t.items()} for t in _ys]
+                loss_dict = self.forward_lidc(x, targets)
+                if loss is None:
+                    loss = sum(l for l in loss_dict.values())
+                else:
+                    loss += sum(l for l in loss_dict.values())
+        else:
+            x = list(i.to(self.device) for i in xs)
+            targets = [{k: v.to(self.device) for k, v in t.items()} for t in ys]
+            loss_dict = self.forward_lidc(x, targets)
+            if loss is None:
+                loss = sum(l for l in loss_dict.values())
 
         return loss
 
     def forward_lidc(self, x, y):
         return self.model(x, y)
+
+    def get_uncertainties(self, x):
+        pass

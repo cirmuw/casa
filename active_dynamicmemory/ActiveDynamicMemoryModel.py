@@ -4,8 +4,6 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 from torch.utils.data import DataLoader
-from datasets.ContinuousDataset import BrainAgeContinuous, CardiacContinuous
-from datasets.BatchDataset import BrainAgeBatch, CardiacBatch
 from . import utils
 import torch.nn as nn
 
@@ -94,23 +92,36 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
                                             iterations=None,
                                             batch_size=self.hparams.batch_size,
                                             split=['base']),
-                            batch_size=self.hparams.batch_size, num_workers=4, pin_memory=True)
+                            batch_size=self.hparams.batch_size, num_workers=4, pin_memory=True, collate_fn=self.collate_fn)
 
         memoryitems = []
         for batch in dl:
             torch.cuda.empty_cache()
 
             x, y, scanner, filepath = batch
+
+            if type(x) is list:
+                x = torch.stack(x)
+
             x = x.to(self.device)
-            if self.hparams.dim==2:
+
+            if x.size()[1]==1:
                 xstyle = torch.cat([x, x, x], dim=1)
             else:
                 xstyle = x
             _ = self.stylemodel(xstyle)
 
             for i, f in enumerate(filepath):
+                target = y[i]
+                if type(target) == torch.Tensor:
+                    det_target = target.detach().cpu()
+                else:
+                    det_target = {}
+                    for k, v in target.items():
+                        det_target[k] = v.detach().cpu()
+
                 grammatrix = [bg[i].detach().cpu().numpy().flatten() for bg in self.grammatrices]
-                memoryitems.append(MemoryItem(x[i].detach().cpu(), y[i], f, scanner[i],
+                memoryitems.append(MemoryItem(x[i].detach().cpu(), det_target, f, scanner[i],
                                               current_grammatrix=grammatrix[0],
                                               pseudo_domain=0))
 
@@ -145,7 +156,17 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
 
         for i, img in enumerate(x):
             grammatrix = [bg[i].detach().cpu().numpy().flatten() for bg in self.grammatrices]
-            new_mi = MemoryItem(img.detach().cpu(), y[i].detach().cpu(), filepath[i], scanner[i], grammatrix[0])
+
+            target = y[i]
+            if type(target) == torch.Tensor:
+                det_target = target.detach().cpu()
+            else:
+                det_target = {}
+                for k, v in target.items():
+                    det_target[k] = v.detach().cpu()
+
+
+            new_mi = MemoryItem(img.detach().cpu(), det_target, filepath[i], scanner[i], grammatrix[0])
             self.budget = self.trainingsmemory.insert_element(new_mi, self.budget, self)
 
         self.budget = self.trainingsmemory.check_outlier_memory(self.budget, self)
@@ -197,6 +218,11 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
 
     def training_step(self, batch, batch_idx):
         x, y, scanner, filepath = batch
+
+        if type(x) is list or type(x) is tuple:
+            x = torch.stack(x)
+            print('x shape', x.shape)
+
         self.grammatrices = []
 
         if self.hparams.continuous:
@@ -216,7 +242,8 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
         if self.hparams.use_memory:
             #y = y[:, None]
             self.grammatrices = []
-            if self.hparams.dim == 2:
+            if x.size()[1] == 1:
+                print(x)
                 xstyle = torch.cat([x, x, x], dim=1)
             else:
                 xstyle = x

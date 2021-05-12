@@ -15,8 +15,8 @@ trainparams:
     random_cache: True
     datasetfile: '/project/catinous/brainds_split_val_test_melba.csv'
     transition_phase_after: 0.8
-    batch_size: 4
-    training_batch_size: 8
+    batch_size: 2
+    training_batch_size: 4
     order: ['1.5T Philips', '1.5T', '3.0T Philips', '3.0T']
     scanner: null
     base_model: 'brainage_batch_brainds_split_val_test_melba_base_1_81207b7536.pt'

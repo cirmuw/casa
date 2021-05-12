@@ -17,6 +17,6 @@ trainparams:
     base_model: null
     run_postfix: 1
     val_check_interval: 500
-    droprate: 0.0
+    droprate: 0.4
     learning_rate: 0.001
     gradient_clip_val: 0
