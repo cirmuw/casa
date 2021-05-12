@@ -1,6 +1,6 @@
 import yaml
 import argparse
-import active_dynamicmemory.utils as autils
+import active_dynamicmemory.runutils as rutils
 from py_jotools import slurm
 
 def train_config(configfile, remote=False):
@@ -11,9 +11,9 @@ def train_config(configfile, remote=False):
         with open('training_configs/slurm_config.yml') as s:
             sparams = yaml.load(s, Loader=yaml.FullLoader)
         print('scheduling job to CIR cluster...')
-        slurm.srun(autils.trained_model, [params['trainparams'], params['settings']], params=sparams, remote=True)
+        slurm.srun(rutils.trained_model, [params['trainparams'], params['settings']], params=sparams, remote=True)
     else:
-        model, logs, df_mem, exp_name = autils.trained_model(params['trainparams'], params['settings'])
+        model, logs, df_mem, exp_name = rutils.trained_model(params['trainparams'], params['settings'])
 
         print('successfully trained model', exp_name)
 
