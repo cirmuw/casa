@@ -123,6 +123,6 @@ def add_dropout_to_seq(sequential, droprate=0.4):
     ls = []
     for l in sequential:
         ls.append(l)
-        ls.append(nn.Dropout(droprate, inplace=True))
+        ls.append(nn.Dropout(droprate))
     return nn.Sequential(*ls)
 
