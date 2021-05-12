@@ -221,7 +221,6 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
 
         if type(x) is list or type(x) is tuple:
             x = torch.stack(x)
-            print('x shape', x.shape)
 
         self.grammatrices = []
 
