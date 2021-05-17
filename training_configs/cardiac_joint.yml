@@ -11,12 +11,13 @@ trainparams:
     batch_size: 8
     task: 'cardiac'
     noncontinuous_steps: 5000
-    noncontinuous_train_splits: ['base']
+    noncontinuous_train_splits: ['base', 'train']
     order: ['Siemens', 'GE', 'Philips', 'Canon']
-    scanner: null
+    scanner: 'Canon'
     base_model: null
     run_postfix: 1
+    seed: 1
     val_check_interval: 50
-    droprate: 0.25
+    droprate: 0.0
     learning_rate: 0.001
     gradient_clip_val: 0

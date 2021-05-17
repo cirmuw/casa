@@ -18,7 +18,7 @@ trainparams:
     training_batch_size: 8
     order: ['Siemens', 'GE', 'Philips', 'Canon']
     scanner: null
-    base_model: 'cardiac_batch_cardiacslicessplitsingle_base_1_cd8a40e2e0.pt'
+    base_model: 'cardiac_batch_cardiacslicessplitsingle_base_1_d885e299cf.pt'
     run_postfix: 1
     val_check_interval: 10
     memorymaximum: 64

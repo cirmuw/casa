@@ -124,5 +124,5 @@ def save_memory_to_csv(memory, savepath):
     df_memory = pd.DataFrame({'filepath':[e.filepath for e in memory],
                              'target': [e.target.cpu().numpy()[0] for e in memory],
                              'scanner': [e.scanner for e in memory],
-                             'pseudodomain': [e.domain for e in memory]})
+                             'pseudodomain': [e.pseudo_domain for e in memory]})
     df_memory.to_csv(savepath, index=False, index_label=False)
