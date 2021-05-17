@@ -61,7 +61,6 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
             layer.register_forward_hook(self.gram_hook)
 
         initelements = self.getmemoryitems_from_base(num_items=self.hparams.memorymaximum)
-        print(initelements[0])
 
         if self.hparams.method == 'naive':
             self.trainingsmemory = NaiveDynamicMemory(initelements=initelements,
@@ -188,7 +187,6 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
         # form trainings X domain balanced batches to train one epoch on all newly inserted samples
         if not np.all(list(
                 self.trainingsmemory.domaincomplete.values())) and self.budgetchangecounter < 10:  # only train when a domain is incomplete and new samples are inserted?
-            print(self.trainingsmemory.domaincomplete)
 
             for k, v in self.trainingsmemory.domaincomplete.items():
                 if not v:
@@ -249,7 +247,6 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
             #y = y[:, None]
             self.grammatrices = []
             if x.size()[1] == 1:
-                print(x)
                 xstyle = torch.cat([x, x, x], dim=1)
             elif type(x) is list or type(x) is tuple:
                 xstyle = torch.stack(x)
