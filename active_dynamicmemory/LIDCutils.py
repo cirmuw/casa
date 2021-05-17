@@ -31,12 +31,12 @@ def bb_intersection_over_union(boxA, boxB):
     return iou
 
 
-def filter_boxes_area(boxes, scores, min_area=10):
+def filter_boxes_area(boxes, scores, min_area=10, min_score=0.0):
     out_boxes = []
     out_scores = []
     for i, b in enumerate(boxes):
         area = (b[3] - b[1]) * (b[2] - b[0])
-        if area > min_area:
+        if area > min_area and scores[i]>min_score:
             out_boxes.append(b)
             out_scores.append(scores[i])
 

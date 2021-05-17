@@ -47,8 +47,8 @@ class LIDCActiveDynamicMemory(ActiveDynamicMemoryModel):
 
         ious = []
         for t in target:
-            for b in final_boxes[0]:
-                ious.append(lutils.bb_intersection_over_union(t, b))
+            for i, b in enumerate(final_boxes[0]):
+                ious.append(float(final_scores[0][i]) * lutils.bb_intersection_over_union(t, b))
         self.train()
         return np.array(ious).mean()
 
@@ -231,4 +231,29 @@ class LIDCActiveDynamicMemory(ActiveDynamicMemoryModel):
         return self.model(x, y)
 
     def get_uncertainties(self, x):
-        pass
+        out = self.forward(x)
+        boxes, scores = lutils.filter_boxes_area(out[0]['boxes'].cpu().detach().numpy(),
+                                                 out[0]['scores'].cpu().detach().numpy(), min_score=0.2)
+        fb, fs = lutils.correct_boxes(boxes, scores)
+
+        bious = []
+
+        for i in range(self.hparams.uncertainty_iterations):
+            out = self.forward(x)
+            boxes, scores = lutils.filter_boxes_area(out[0]['boxes'].cpu().detach().numpy(),
+                                                     out[0]['scores'].cpu().detach().numpy(), min_score=0.2)
+            fb2, fs2 = lutils.correct_boxes(boxes, scores)
+
+            for i, b in enumerate(fb):
+                ious = []
+                for j, b2 in enumerate(fb2):
+                    ious.append(lutils.bb_intersection_over_union(b, b2))
+                if len(bious) <= i:
+                    bious.append([])
+                if len(ious) > 0:
+                    bious[i].append(np.array(ious).max() * fs[i])
+            if len(fb2) > 0:
+                fb, fs = lutils.correct_boxes(np.concatenate([fb, fb2]), np.concatenate([fs, fs2]))
+
+
+        return np.array(bious[0]).std()
