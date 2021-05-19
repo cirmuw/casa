@@ -43,7 +43,7 @@ class BrainAgeActiveDynamicMemory(ActiveDynamicMemoryModel):
         :param load_stylemodel: If true loads the style model (needed for training)
         :return: loaded model, stylemodel and gramlayers
         """
-        model = agemodels.EncoderRegressor(droprate=droprate)
+        model = agemodels.EncoderRegressor(droprate=droprate, fulldrop=self.hparams.fulldrop)
 
         if load_stylemodel:
             stylemodel = EncoderModelGenesis()

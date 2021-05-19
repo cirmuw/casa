@@ -123,7 +123,7 @@ def eval_params(params):
     settings = argparse.Namespace(**params['settings'])
 
     expname = admutils.get_expname(params['trainparams'])
-    order = params['trainparams']['order']
+    order = params['trainparams']['order'].copy()
 
     if not os.path.exists(f'{settings.RESULT_DIR}/cache/{expname}_dicescores.csv'):
         if params['trainparams']['continuous'] == False:
@@ -194,7 +194,7 @@ def eval_config(configfile, seeds=None, name=None):
         df = pd.DataFrame()
         for i, seed in enumerate(seeds):
             params['trainparams']['seed'] = seed
-            params['trainparams']['run_postfix'] = i+1
+            params['trainparams']['run_postfix'] = seed
             df_temp = eval_params(params)
             df_temp['seed'] = seed
             if name is not None:
@@ -225,7 +225,7 @@ def val_df_for_params(params):
     max_version = max([int(x.split('_')[1]) for x in os.listdir(settings.LOGGING_DIR + exp_name)])
     df_temp = pd.read_csv(settings.LOGGING_DIR  + exp_name + '/version_{}/metrics.csv'.format(max_version))
 
-    df_temp = df_temp.loc[df_temp['val_dice1_Canon'] == df_temp['val_dice1_Canon']]
+    df_temp = df_temp.loc[df_temp['val_dice_lv_Canon'] == df_temp['val_dice_lv_Canon']]
     df_temp['idx'] = range(1, len(df_temp) + 1)
 
     return df_temp
@@ -247,7 +247,7 @@ def val_data_for_params(params, seeds=None):
             df = df.append(val_df_for_params(params))
 
     for scanner in params['trainparams']['order']:
-        df[f'val_mean_{scanner}'] = (df[f'val_dice1_{scanner}'] + df[f'val_dice2_{scanner}'] + df[f'val_dice1_{scanner}']) / 3
+        df[f'val_mean_{scanner}'] = (df[f'val_dice_lv_{scanner}'] + df[f'val_dice_rv_{scanner}'] + df[f'val_dice_myo_{scanner}']) / 3
 
     return df
 
@@ -265,7 +265,7 @@ def plot_validation_curves(configfiles, val_measure='val_mean', names=None, seed
         ax = axes[k]
         for scanner in params['trainparams']['order']:
             sns.lineplot(data=df, y=f'{val_measure}_{scanner}', x='idx', err_style=None, ax=ax, label=scanner)
-        ax.set_ylim(0.67, 0.89)
+        ax.set_ylim(0.25, 0.89)
         ax.set_yticks([0.85, 0.80, 0.75, 0.70])
         ax.get_xaxis().set_visible(False)
         ax.get_legend().remove()

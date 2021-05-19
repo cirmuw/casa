@@ -6,41 +6,41 @@ import torch.nn as nn
 ########################################################################################################################
 
 class Encoder(nn.Module):
-    def __init__(self, droprate=0.0):
+    def __init__(self, droprate=0.0, fulldrop=True):
         super(Encoder, self).__init__()
         self.feature = nn.Sequential()      # Define the feature extractor
         self.feature.add_module('f_conv1_1', nn.Conv3d(1, 32, kernel_size=3, padding=1))
         self.feature.add_module('f_relu_1_1', nn.ReLU(True))
-        if droprate!=0.0: #this is an ugly hack
+        if droprate!=0.0 and fulldrop: #this is an ugly hack
             self.feature.add_module('f_dropout_1_1', nn.Dropout(droprate))
         self.feature.add_module('f_bn1_1', nn.BatchNorm3d(32))
         self.feature.add_module('f_conv1_2', nn.Conv3d(32, 32, kernel_size=3, padding=1))
         self.feature.add_module('f_relu_1_2', nn.ReLU(True))
-        if droprate != 0.0:
+        if droprate != 0.0 and fulldrop:
             self.feature.add_module('f_dropout_1_2', nn.Dropout(droprate))
         self.feature.add_module('f_bn1_2', nn.BatchNorm3d(32))
         self.feature.add_module('f_pool1', nn.MaxPool3d(2))
 
         self.feature.add_module('f_conv2_1', nn.Conv3d(32, 64, kernel_size=3, padding=1))
         self.feature.add_module('f_relu_2_1', nn.ReLU(True))
-        if droprate != 0.0:
+        if droprate != 0.0 and fulldrop:
             self.feature.add_module('f_dropout_2_1', nn.Dropout(droprate))
         self.feature.add_module('f_bn2_1', nn.BatchNorm3d(64))
         self.feature.add_module('f_conv2_2', nn.Conv3d(64, 64, kernel_size=3, padding=1))
         self.feature.add_module('f_relu_2_2', nn.ReLU(True))
-        if droprate != 0.0:
+        if droprate != 0.0 and fulldrop:
             self.feature.add_module('f_dropout_2_2', nn.Dropout(droprate))
         self.feature.add_module('f_bn2_2', nn.BatchNorm3d(64))
         self.feature.add_module('f_pool2', nn.MaxPool3d(2))
 
         self.feature.add_module('f_conv3_1', nn.Conv3d(64, 64, kernel_size=3, padding=1))
         self.feature.add_module('f_relu_3_1', nn.ReLU(True))
-        if droprate != 0.0:
+        if droprate != 0.0 and fulldrop:
             self.feature.add_module('f_dropout_3_1', nn.Dropout(droprate))
         self.feature.add_module('f_bn3_1', nn.BatchNorm3d(64))
         self.feature.add_module('f_conv3_2', nn.Conv3d(64, 64, kernel_size=3, padding=1))
         self.feature.add_module('f_relu_3_2', nn.ReLU(True))
-        if droprate != 0.0:
+        if droprate != 0.0 and fulldrop:
             self.feature.add_module('f_dropout_3_2', nn.Dropout(droprate))
         self.feature.add_module('f_bn3_2', nn.BatchNorm3d(64))
         self.feature.add_module('f_pool3', nn.MaxPool3d(2))
@@ -139,10 +139,10 @@ class DomainPredictor(nn.Module):
 
 
 class EncoderRegressor(nn.Module):
-    def __init__(self, droprate=0.0):
+    def __init__(self, droprate=0.0, fulldrop=True):
         super(EncoderRegressor, self).__init__()
 
-        self.encoder = Encoder(droprate)
+        self.encoder = Encoder(droprate, fulldrop=fulldrop)
         self.regressor = Regressor(droprate)
 
     def forward(self, x):

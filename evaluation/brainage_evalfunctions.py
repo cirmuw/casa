@@ -63,7 +63,7 @@ def eval_brainage_batch(params, outfile):
 def eval_brainage_dl(model, dl, device='cuda'):
     device = torch.device(device)
     model.to(device)
-    model.eval()
+    model.freeze()
 
     scanners = []
     img = []

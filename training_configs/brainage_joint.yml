@@ -21,3 +21,4 @@ trainparams:
     learning_rate: 0.0001
     gradient_clip_val: 0
     dim: 3
+    seed: 1
