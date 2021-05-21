@@ -8,7 +8,7 @@ trainparams:
     method: 'uncertainty'
     task: 'cardiac'
     startbudget: 860
-    uncertainty_threshold: 0.1
+    uncertainty_threshold: 0.03
     uncertainty_iterations: 20
     continuous: True
     use_memory: True
@@ -19,10 +19,10 @@ trainparams:
     training_batch_size: 8
     order: ['Siemens', 'GE', 'Philips', 'Canon']
     scanner: null
-    base_model: 'cardiac_batch_cardiacslicessplitsingle_base_1_cd8a40e2e0.pt'
+    base_model: 'cardiac_batch_cardiacslicessplitsingle_base_1_d885e299cf.pt'
     run_postfix: 1
     val_check_interval: 10
-    memorymaximum: 64
+    memorymaximum: 128
     droprate: 0.25
     learning_rate: 0.0001
     gradient_clip_val: 0.5

@@ -310,6 +310,7 @@ class UncertaintyDynamicMemory(DynamicMemory):
 
     def insert_element(self, item, uncertainty, budget, model):
         if budget>0 and uncertainty>self.uncertainty_threshold:
+            print('insert element of type', item.scanner, budget)
             if len(self.memorylist)<self.memorymaximum:
                 self.memorylist.append(item)
                 self.forceitems.append(item)
@@ -326,10 +327,19 @@ class UncertaintyDynamicMemory(DynamicMemory):
                     if loss < mingramloss:
                         mingramloss = loss
                         insertidx = j
+                print('insert position', insertidx)
                 self.memorylist[insertidx] = item
                 self.forceitems.append(item)
                 self.labeling_counter += 1
                 budget-=1
+
+            scanners = dict()
+            for mi in self.memorylist:
+                if mi.scanner in scanners:
+                    scanners[mi.scanner] += 1
+                else:
+                    scanners[mi.scanner] = 1
+            print(scanners)
 
         return budget
 

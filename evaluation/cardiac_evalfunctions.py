@@ -15,14 +15,14 @@ from matplotlib.colors import ListedColormap
 from monai.metrics import DiceMetric
 import monai.networks.utils as mutils
 
-def eval_cardiac(params, outfile):
+def eval_cardiac(params, outfile, split=['test']):
     """
     Base evaluation for cardiac on image level, stored to an outputfile
     """
 
     device = torch.device('cuda')
 
-    dl_test = DataLoader(CardiacBatch(params['trainparams']['datasetfile'], split=['test']), batch_size=16)
+    dl_test = DataLoader(CardiacBatch(params['trainparams']['datasetfile'], split=split), batch_size=16)
     model, _, _, _ = rutils.trained_model(params['trainparams'], params['settings'], training=False)
 
     model.to(device)
@@ -65,8 +65,8 @@ def eval_cardiac(params, outfile):
     df_results = pd.DataFrame({'scanner': scanners, 'dice_lv': dice_lv, 'dice_myo': dice_myo, 'dice_rv': dice_rv, 'dice_mean': dice_mean, 'shift': shifts})
     df_results.to_csv(outfile, index=False)
 
-def eval_cardiac_batch(params, outfile):
-    dl_test = DataLoader(CardiacBatch(params['trainparams']['datasetfile'], split=['val']), batch_size=16)
+def eval_cardiac_batch(params, outfile, split=['test']):
+    dl_test = DataLoader(CardiacBatch(params['trainparams']['datasetfile'], split=split), batch_size=16)
     model, _, _, _ = rutils.trained_model(params['trainparams'], params['settings'], training=False)
 
     scanners, dice_lv, dice_myo, dice_rv, dice_mean, img =  eval_cardiac_dl(model, dl_test)
@@ -119,7 +119,7 @@ def eval_cardiac_dl(model, dl, device='cuda'):
 
     return scanners, dice_lv, dice_myo, dice_rv, dice_mean, img
 
-def eval_params(params):
+def eval_params(params, split=['test']):
     settings = argparse.Namespace(**params['settings'])
 
     expname = admutils.get_expname(params['trainparams'])
@@ -127,9 +127,9 @@ def eval_params(params):
 
     if not os.path.exists(f'{settings.RESULT_DIR}/cache/{expname}_dicescores.csv'):
         if params['trainparams']['continuous'] == False:
-            eval_cardiac_batch(params, f'{settings.RESULT_DIR}/cache/{expname}_dicescores.csv')
+            eval_cardiac_batch(params, f'{settings.RESULT_DIR}/cache/{expname}_dicescores.csv', split=split)
         else:
-            eval_cardiac(params, f'{settings.RESULT_DIR}/cache/{expname}_dicescores.csv')
+            eval_cardiac(params, f'{settings.RESULT_DIR}/cache/{expname}_dicescores.csv', split=split)
 
     if params['trainparams']['continuous'] == False:
         df = pd.read_csv(f'{settings.RESULT_DIR}/cache/{expname}_dicescores.csv')
@@ -182,11 +182,11 @@ def eval_params(params):
 
     return df_res
 
-def eval_config(configfile, seeds=None, name=None):
+def eval_config(configfile, seeds=None, name=None, split=['test']):
     with open(configfile) as f:
         params = yaml.load(f, Loader=yaml.FullLoader)
     if seeds is None:
-        df = eval_params(params)
+        df = eval_params(params, split=split)
         if name is not None:
             df['model'] = name
         return df
@@ -195,7 +195,7 @@ def eval_config(configfile, seeds=None, name=None):
         for i, seed in enumerate(seeds):
             params['trainparams']['seed'] = seed
             params['trainparams']['run_postfix'] = seed
-            df_temp = eval_params(params)
+            df_temp = eval_params(params, split=split)
             df_temp['seed'] = seed
             if name is not None:
                 df_temp['model'] = name
@@ -265,7 +265,7 @@ def plot_validation_curves(configfiles, val_measure='val_mean', names=None, seed
         ax = axes[k]
         for scanner in params['trainparams']['order']:
             sns.lineplot(data=df, y=f'{val_measure}_{scanner}', x='idx', err_style=None, ax=ax, label=scanner)
-        ax.set_ylim(0.25, 0.89)
+        ax.set_ylim(0.50, 0.89)
         ax.set_yticks([0.85, 0.80, 0.75, 0.70])
         ax.get_xaxis().set_visible(False)
         ax.get_legend().remove()

@@ -19,10 +19,11 @@ trainparams:
     training_batch_size: 4
     order: ['1.5T Philips', '1.5T', '3.0T Philips', '3.0T']
     scanner: null
-    base_model: 'brainage_batch_brainds_split_val_test_melba_base_1_81207b7536.pt'
+    base_model: 'brainage_batch_brainds_split_val_test_melba_base_1_1108d7c066.pt'
     val_check_interval: 10
     memorymaximum: 64
-    droprate: 0.25
+    droprate: 0.1
+    fulldrop: True
     learning_rate: 0.0001
     gradient_clip_val: 0.5
     allowedlabelratio: 0

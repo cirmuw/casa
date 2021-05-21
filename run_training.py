@@ -3,13 +3,16 @@ import argparse
 import active_dynamicmemory.runutils as rutils
 from py_jotools import slurm
 
-def train_config(configfile, remote=False, runs=None):
+def train_config(configfile, remote=False, runs=None, jobarray=False):
     with open(configfile) as f:
         params = yaml.load(f, Loader=yaml.FullLoader)
 
     if remote:
         with open('training_configs/slurm_config.yml') as s:
             sparams = yaml.load(s, Loader=yaml.FullLoader)
+
+    if jobarray:
+        sparams['qos'] = 'jobarray'
 
     if runs is None:
         if remote:

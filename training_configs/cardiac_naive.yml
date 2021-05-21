@@ -7,7 +7,7 @@ settings:
 trainparams:
     method: 'naive'
     task: 'cardiac'
-    naive_insert_rate: 5
+    naive_insert_rate: 20
     startbudget: 860
     continuous: True
     use_memory: True
@@ -21,7 +21,7 @@ trainparams:
     base_model: 'cardiac_batch_cardiacslicessplitsingle_base_1_d885e299cf.pt'
     run_postfix: 1
     val_check_interval: 10
-    memorymaximum: 64
+    memorymaximum: 128
     droprate: 0.25
     learning_rate: 0.0001
     gradient_clip_val: 0.5

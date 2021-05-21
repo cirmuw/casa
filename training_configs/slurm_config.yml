@@ -2,7 +2,7 @@ binary: '/home/cir/mperkonigg/env/catinous/bin/python'
 cwd: '/home/cir/mperkonigg/catinous/active_catinous/'
 gpu: 1
 partition: 'centos7'
-memory: 100000
+memory: 10000
 constraint: 'bigGPUmem'
 jobname: 'adm'
 outputpath: '/home/cir/mperkonigg/slurmoutput/'

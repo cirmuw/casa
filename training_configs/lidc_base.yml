@@ -10,13 +10,13 @@ trainparams:
     datasetfile: '/project/catinous/lungnodulesfinallndbBig.csv'
     batch_size: 8
     task: 'lidc'
-    noncontinuous_steps: 5000
+    noncontinuous_steps: 1000
     noncontinuous_train_splits: ['base']
     order: ['ges', 'geb', 'sie', 'lndb']
     scanner: 'ges'
     base_model: null
     run_postfix: 1
     val_check_interval: 50
-    droprate: 0.25
+    droprate: 0.0
     learning_rate: 0.0001
-    gradient_clip_val: 0
+    gradient_clip_val: 0.5

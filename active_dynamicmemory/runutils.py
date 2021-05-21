@@ -36,7 +36,9 @@ def trained_model(hparams, settings, training=True):
         raise NotImplementedError('task not implemented')
 
     exp_name = get_expname(hparams)
+    print(exp_name)
     weights_path = cached_path(hparams, settings.TRAINED_MODELS_DIR)
+    print(weights_path)
 
     if not os.path.exists(weights_path) and training:
         logger = pllogging.TestTubeLogger(settings.LOGGING_DIR, name=exp_name)
@@ -66,11 +68,13 @@ def trained_model(hparams, settings, training=True):
         model = None
         return model, None, None, exp_name + '.pt'
 
+    print(model.hparams.continuous, model.hparams.use_memory)
     if model.hparams.continuous and model.hparams.use_memory:
         if os.path.exists(settings.TRAINED_MEMORY_DIR + exp_name + '.csv'):
             df_memory = pd.read_csv(settings.TRAINED_MEMORY_DIR + exp_name + '.csv')
         else:
             df_memory = None
+            print(settings.TRAINED_MEMORY_DIR + exp_name + '.csv', 'does not exist')
     else:
         df_memory=None
 

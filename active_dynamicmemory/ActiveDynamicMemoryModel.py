@@ -51,8 +51,6 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
 
         if self.hparams.use_memory and self.hparams.continuous and training:
             self.init_memory_and_gramhooks()
-        else:
-            self.hparams.use_memory = False
 
     def init_memory_and_gramhooks(self):
         self.grammatrices = []
@@ -104,7 +102,7 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
 
             x = x.to(self.device)
 
-            if x.size()[1]==1:
+            if x.size()[1]==1 and self.hparams.dim!=3:
                 xstyle = torch.cat([x, x, x], dim=1)
             else:
                 xstyle = x
@@ -246,7 +244,7 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
         if self.hparams.use_memory:
             #y = y[:, None]
             self.grammatrices = []
-            if x.size()[1] == 1:
+            if x.size()[1] == 1 and self.hparams.dim != 3:
                 xstyle = torch.cat([x, x, x], dim=1)
             elif type(x) is list or type(x) is tuple:
                 xstyle = torch.stack(x)
