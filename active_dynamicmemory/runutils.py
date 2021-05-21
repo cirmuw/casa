@@ -52,6 +52,9 @@ def trained_model(hparams, settings, training=True):
         if model.hparams.continuous:
             print('train counter', model.train_counter)
             print('label counter', model.trainingsmemory.labeling_counter)
+            with open(settings.TRAINED_MEMORY_DIR + exp_name +'.txt', 'w') as f:
+                f.write('train counter: ' + str(model.train_counter) + '\n')
+                f.write('label counter: ' + str(model.trainingsmemory.labeling_counter))
         if model.hparams.continuous and model.hparams.use_memory:
             save_memory_to_csv(model.trainingsmemory.memorylist, settings.TRAINED_MEMORY_DIR + exp_name + '.csv')
     elif os.path.exists(weights_path):
