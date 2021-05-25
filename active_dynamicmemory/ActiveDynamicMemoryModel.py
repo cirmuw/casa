@@ -286,7 +286,8 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
                                                     iterations=self.hparams.noncontinuous_steps,
                                                     batch_size=self.hparams.batch_size,
                                                     split=self.hparams.noncontinuous_train_splits,
-                                                    res=self.hparams.scanner),
+                                                    res=self.hparams.scanner,
+                                                    seed=self.hparams.seed),
                               batch_size=self.hparams.batch_size, num_workers=8, collate_fn=self.collate_fn)
 
     #@pl.data_loader

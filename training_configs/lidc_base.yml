@@ -16,6 +16,7 @@ trainparams:
     scanner: 'ges'
     base_model: null
     run_postfix: 1
+    seed: 1
     val_check_interval: 50
     droprate: 0.0
     learning_rate: 0.0001
