@@ -15,7 +15,7 @@ import os
 from pytorch_lightning.utilities.parsing import AttributeDict
 
 
-def trained_model(hparams, settings, training=True):
+def trained_model(mparams, settings, training=True):
     if torch.cuda.is_available():
         device = torch.device('cuda')
     else:
@@ -26,36 +26,36 @@ def trained_model(hparams, settings, training=True):
     os.makedirs(settings.TRAINED_MEMORY_DIR, exist_ok=True)
     os.makedirs(settings.RESULT_DIR, exist_ok=True)
 
-    if hparams['task'] == 'cardiac':
-        model = CardiacActiveDynamicMemory(hparams=hparams, modeldir=settings.TRAINED_MODELS_DIR, device=device, training=training)
-    elif hparams['task'] == 'brainage':
-        model = BrainAgeActiveDynamicMemory(hparams=hparams, modeldir=settings.TRAINED_MODELS_DIR, device=device, training=training)
-    elif hparams['task'] == 'lidc':
-        model = LIDCActiveDynamicMemory(hparams=hparams, modeldir=settings.TRAINED_MODELS_DIR, device=device, training=training)
+    if mparams['task'] == 'cardiac':
+        model = CardiacActiveDynamicMemory(mparams=mparams, modeldir=settings.TRAINED_MODELS_DIR, device=device, training=training)
+    elif mparams['task'] == 'brainage':
+        model = BrainAgeActiveDynamicMemory(mparams=mparams, modeldir=settings.TRAINED_MODELS_DIR, device=device, training=training)
+    elif mparams['task'] == 'lidc':
+        model = LIDCActiveDynamicMemory(mparams=mparams, modeldir=settings.TRAINED_MODELS_DIR, device=device, training=training)
     else:
         raise NotImplementedError('task not implemented')
 
-    exp_name = get_expname(hparams)
+    exp_name = get_expname(mparams)
     print(exp_name)
-    weights_path = cached_path(hparams, settings.TRAINED_MODELS_DIR)
+    weights_path = cached_path(mparams, settings.TRAINED_MODELS_DIR)
     print(weights_path)
 
     if not os.path.exists(weights_path) and training:
         logger = pllogging.TestTubeLogger(settings.LOGGING_DIR, name=exp_name)
         trainer = Trainer(gpus=1, max_epochs=1, logger=logger,
-                          val_check_interval=model.hparams.val_check_interval,
-                          gradient_clip_val=model.hparams.gradient_clip_val,
+                          val_check_interval=model.mparams.val_check_interval,
+                          gradient_clip_val=model.mparams.gradient_clip_val,
                           checkpoint_callback=False)
         trainer.fit(model)
         model.freeze()
         torch.save(model.state_dict(), weights_path)
-        if model.hparams.continuous:
+        if model.mparams.continuous:
             print('train counter', model.train_counter)
             print('label counter', model.trainingsmemory.labeling_counter)
             with open(settings.TRAINED_MEMORY_DIR + exp_name +'.txt', 'w') as f:
                 f.write('train counter: ' + str(model.train_counter) + '\n')
                 f.write('label counter: ' + str(model.trainingsmemory.labeling_counter))
-        if model.hparams.continuous and model.hparams.use_memory:
+        if model.mparams.continuous and model.mparams.use_memory:
             save_memory_to_csv(model.trainingsmemory.memorylist, settings.TRAINED_MEMORY_DIR + exp_name + '.csv')
     elif os.path.exists(weights_path):
         print('Read: ' + weights_path)
@@ -71,8 +71,8 @@ def trained_model(hparams, settings, training=True):
         model = None
         return model, None, None, exp_name + '.pt'
 
-    print(model.hparams.continuous, model.hparams.use_memory)
-    if model.hparams.continuous and model.hparams.use_memory:
+    print(model.mparams.continuous, model.mparams.use_memory)
+    if model.mparams.continuous and model.mparams.use_memory:
         if os.path.exists(settings.TRAINED_MEMORY_DIR + exp_name + '.csv'):
             df_memory = pd.read_csv(settings.TRAINED_MEMORY_DIR + exp_name + '.csv')
         else:
@@ -92,38 +92,38 @@ def trained_model(hparams, settings, training=True):
     return model, logs, df_memory, exp_name +'.pt'
 
 
-def is_cached(hparams, trained_dir):
-    exp_name = get_expname(hparams)
+def is_cached(mparams, trained_dir):
+    exp_name = get_expname(mparams)
     return os.path.exists(trained_dir + exp_name + '.pt')
 
 
-def cached_path(hparams, trained_dir):
-    exp_name = get_expname(hparams)
+def cached_path(mparams, trained_dir):
+    exp_name = get_expname(mparams)
     return trained_dir + exp_name + '.pt'
 
-def get_expname(hparams):
-    if type(hparams) is argparse.Namespace:
-        hparams = vars(hparams).copy()
-    elif type(hparams) is AttributeDict:
-        hparams = dict(hparams)
+def get_expname(mparams):
+    if type(mparams) is argparse.Namespace:
+        mparams = vars(mparams).copy()
+    elif type(mparams) is AttributeDict:
+        mparams = dict(mparams)
 
-    hashed_params = utils.hash(hparams, length=10)
+    hashed_params = utils.hash(mparams, length=10)
 
-    expname = hparams['task']
-    expname += '_cont' if hparams['continuous'] else '_batch'
+    expname = mparams['task']
+    expname += '_cont' if mparams['continuous'] else '_batch'
 
-    if 'naive_continuous' in hparams:
+    if 'naive_continuous' in mparams:
         expname += '_naive'
 
-    expname += '_' + os.path.splitext(os.path.basename(hparams['datasetfile']))[0]
-    if hparams['base_model']:
-        expname += '_basemodel_' + hparams['base_model'].split('_')[1]
-    if hparams['continuous']:
-        expname += '_memory' if hparams['use_memory'] else '_nomemory'
-        expname += '_tf{}'.format(str(hparams['transition_phase_after']).replace('.', ''))
+    expname += '_' + os.path.splitext(os.path.basename(mparams['datasetfile']))[0]
+    if mparams['base_model']:
+        expname += '_basemodel_' + mparams['base_model'].split('_')[1]
+    if mparams['continuous']:
+        expname += '_memory' if mparams['use_memory'] else '_nomemory'
+        expname += '_tf{}'.format(str(mparams['transition_phase_after']).replace('.', ''))
     else:
-        expname += '_' + '-'.join(hparams['noncontinuous_train_splits'])
-    expname += '_'+str(hparams['run_postfix'])
+        expname += '_' + '-'.join(mparams['noncontinuous_train_splits'])
+    expname += '_'+str(mparams['run_postfix'])
     expname += '_'+hashed_params
     return expname
 

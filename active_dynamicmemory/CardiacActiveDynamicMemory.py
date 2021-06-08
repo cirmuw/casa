@@ -12,13 +12,13 @@ import numpy as np
 
 class CardiacActiveDynamicMemory(ActiveDynamicMemoryModel):
 
-    def __init__(self, hparams={}, modeldir=None, device=torch.device('cpu'), training=True):
+    def __init__(self, mparams={}, modeldir=None, device=torch.device('cpu'), training=True):
         super(ActiveDynamicMemoryModel, self).__init__()
         self.collate_fn = None
         self.TaskDatasetBatch = CardiacBatch
         self.TaskDatasetContinuous = CardiacContinuous
         self.loss = nn.CrossEntropyLoss()
-        self.init(hparams=hparams, modeldir=modeldir, device=device, training=training)
+        self.init(mparams=mparams, modeldir=modeldir, device=device, training=training)
 
     def load_model_stylemodel(self, droprate, load_stylemodel=False):
         """
@@ -70,7 +70,7 @@ class CardiacActiveDynamicMemory(ActiveDynamicMemoryModel):
         :param m: value to compare to the threshold
         :return: Wheter or not the domain is considered completed
         """
-        return m>self.hparams.completion_limit
+        return m>self.mparams.completion_limit
 
     def validation_step(self, batch, batch_idx):
         """
@@ -127,7 +127,7 @@ class CardiacActiveDynamicMemory(ActiveDynamicMemoryModel):
         y_hat_flats = []
         uncertainties = []
 
-        for i in range(self.hparams.uncertainty_iterations):
+        for i in range(self.mparams.uncertainty_iterations):
             outy = self.forward(x)
             y_hat_flat = torch.argmax(outy, dim=1)[:, None, :, :]
             y_hat_flats.append(y_hat_flat)

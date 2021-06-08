@@ -121,7 +121,7 @@ def eval_params(params):
                          df_scanner.loc[df_scanner['shift'] == order[1]].ae.values[0]
 
     bwt /= len(order) - 1
-    fwt['dice_rv'] /= len(order) - 1
+    fwt /= len(order) - 1
     df_res = df_res.append(pd.DataFrame({'scanner': ['BWT', 'FWT'], 'shift': ['None', 'None'],
                                          'ae': [bwt, fwt]}))
 

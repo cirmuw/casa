@@ -13,30 +13,30 @@ from abc import ABC, abstractmethod
 
 class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
 
-    def init(self, hparams={}, modeldir=None, device=torch.device('cpu'), training=True):
-        self.hparams = argparse.Namespace(**hparams)
+    def init(self, mparams={}, modeldir=None, device=torch.device('cpu'), training=True):
+        self.mparams = argparse.Namespace(**mparams)
         self.to(device)
 
         self.modeldir = modeldir
 
-        self.model, self.stylemodel, self.gramlayers = self.load_model_stylemodel(self.hparams.droprate, load_stylemodel=training)
+        self.model, self.stylemodel, self.gramlayers = self.load_model_stylemodel(self.mparams.droprate, load_stylemodel=training)
         if training:
             self.stylemodel.to(device)
 
-        self.learning_rate = self.hparams.learning_rate
+        self.learning_rate = self.mparams.learning_rate
         self.train_counter = 0
 
-        if self.hparams.continuous:
-            self.budget = self.hparams.startbudget
+        if self.mparams.continuous:
+            self.budget = self.mparams.startbudget
             self.budgetchangecounter = 0
-            if self.hparams.allowedlabelratio == 0:
+            if self.mparams.allowedlabelratio == 0:
                 self.budgetrate = 0
             else:
-                self.budgetrate = 1 / self.hparams.allowedlabelratio
+                self.budgetrate = 1 / self.mparams.allowedlabelratio
 
 
-        if not self.hparams.base_model is None and training:
-            state_dict =  torch.load(os.path.join(modeldir, self.hparams.base_model))
+        if not self.mparams.base_model is None and training:
+            state_dict =  torch.load(os.path.join(modeldir, self.mparams.base_model))
             new_state_dict = {}
             for key in state_dict.keys():
                 if key.startswith('model.'):
@@ -45,11 +45,11 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
 
         # Initilize checkpoints to calculate BWT, FWT after training
         self.scanner_checkpoints = dict()
-        self.scanner_checkpoints[self.hparams.order[0]] = True
-        for scanner in self.hparams.order[1:]:
+        self.scanner_checkpoints[self.mparams.order[0]] = True
+        for scanner in self.mparams.order[1:]:
             self.scanner_checkpoints[scanner] = False
 
-        if self.hparams.use_memory and self.hparams.continuous and training:
+        if self.mparams.use_memory and self.mparams.continuous and training:
             self.init_memory_and_gramhooks()
 
     def init_memory_and_gramhooks(self):
@@ -58,38 +58,38 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
         for layer in self.gramlayers:
             layer.register_forward_hook(self.gram_hook)
 
-        initelements = self.getmemoryitems_from_base(num_items=self.hparams.memorymaximum)
+        initelements = self.getmemoryitems_from_base(num_items=self.mparams.memorymaximum)
 
-        if self.hparams.method == 'naive':
+        if self.mparams.method == 'naive':
             self.trainingsmemory = NaiveDynamicMemory(initelements=initelements,
-                                                      insert_rate=self.hparams.naive_insert_rate,
-                                                      memorymaximum=self.hparams.memorymaximum,
-                                                      seed=self.hparams.seed)
+                                                      insert_rate=self.mparams.naive_insert_rate,
+                                                      memorymaximum=self.mparams.memorymaximum,
+                                                      seed=self.mparams.seed)
             self.insert_element = self.insert_element_naive
 
-        elif self.hparams.method == 'casa':
+        elif self.mparams.method == 'casa':
             self.trainingsmemory = CasaDynamicMemory(initelements=initelements,
-                                                      memorymaximum=self.hparams.memorymaximum,
-                                                      seed=self.hparams.seed,
-                                                      perf_queue_len=self.hparams.len_perf_queue,
-                                                     transformgrams=self.hparams.transformgrams,
-                                                     outlier_distance=self.hparams.outlier_distance)
+                                                      memorymaximum=self.mparams.memorymaximum,
+                                                      seed=self.mparams.seed,
+                                                      perf_queue_len=self.mparams.len_perf_queue,
+                                                     transformgrams=self.mparams.transformgrams,
+                                                     outlier_distance=self.mparams.outlier_distance)
             self.insert_element = self.insert_element_casa
 
-        elif self.hparams.method == 'uncertainty':
+        elif self.mparams.method == 'uncertainty':
             self.trainingsmemory = UncertaintyDynamicMemory(initelements=initelements,
-                                                      memorymaximum=self.hparams.memorymaximum,
-                                                      seed=self.hparams.seed,
-                                                      uncertainty_threshold=self.hparams.uncertainty_threshold)
+                                                      memorymaximum=self.mparams.memorymaximum,
+                                                      seed=self.mparams.seed,
+                                                      uncertainty_threshold=self.mparams.uncertainty_threshold)
 
             self.insert_element = self.insert_element_uncertainty
 
     def getmemoryitems_from_base(self, num_items=128):
-        dl = DataLoader(self.TaskDatasetBatch(self.hparams.datasetfile,
+        dl = DataLoader(self.TaskDatasetBatch(self.mparams.datasetfile,
                                             iterations=None,
-                                            batch_size=self.hparams.batch_size,
+                                            batch_size=self.mparams.batch_size,
                                             split=['base']),
-                            batch_size=self.hparams.batch_size, num_workers=4, pin_memory=True, collate_fn=self.collate_fn)
+                            batch_size=self.mparams.batch_size, num_workers=4, pin_memory=True, collate_fn=self.collate_fn)
 
         memoryitems = []
         for batch in dl:
@@ -102,7 +102,7 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
 
             x = x.to(self.device)
 
-            if x.size()[1]==1 and self.hparams.dim!=3:
+            if x.size()[1]==1 and self.mparams.dim!=3:
                 xstyle = torch.cat([x, x, x], dim=1)
             else:
                 xstyle = x
@@ -130,14 +130,14 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
         return memoryitems[:num_items]
 
     def gram_hook(self,  m, input, output):
-        if self.hparams.dim == 2:
+        if self.mparams.dim == 2:
             self.grammatrices.append(utils.gram_matrix(input[0]))
-        elif self.hparams.dim == 3:
+        elif self.mparams.dim == 3:
             self.grammatrices.append(utils.gram_matrix_3d(input[0]))
         else:
-            raise NotImplementedError(f'gram hook with {self.hparams.dim} dimensions not defined')
+            raise NotImplementedError(f'gram hook with {self.mparams.dim} dimensions not defined')
 
-    # This is called when hparams.method == 'naive'
+    # This is called when mparams.method == 'naive'
     def insert_element_naive(self, x, y, filepath, scanner):
         for i, img in enumerate(x):
             grammatrix = [bg[i].detach().cpu().numpy().flatten() for bg in self.grammatrices]
@@ -155,7 +155,7 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
         return len(self.trainingsmemory.forceitems)!=0
 
 
-    # This is called when hparams.method == 'casa'
+    # This is called when mparams.method == 'casa'
     def insert_element_casa(self, x, y, filepath, scanner):
         budget_before = self.budget
 
@@ -188,7 +188,7 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
 
             for k, v in self.trainingsmemory.domaincomplete.items():
                 if not v:
-                    if len(self.trainingsmemory.domainMetric[k]) == self.hparams.len_perf_queue:
+                    if len(self.trainingsmemory.domainMetric[k]) == self.mparams.len_perf_queue:
                         mean_metric = np.mean(self.trainingsmemory.domainMetric[k])
                         if self.completed_domain(mean_metric):
                             self.trainingsmemory.domaincomplete[k] = True
@@ -196,7 +196,7 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
         else:
             return False
 
-    # This is called when hparams.method == 'uncertainty'
+    # This is called when mparams.method == 'uncertainty'
     def insert_element_uncertainty(self, x, y, filepath, scanner):
         budget_before = self.budget
 
@@ -227,24 +227,24 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
 
         self.grammatrices = []
 
-        if self.hparams.continuous:
+        if self.mparams.continuous:
             # save checkpoint at scanner shift
             newshift = False
             for s in scanner:
-                if s != self.hparams.order[0] and not self.scanner_checkpoints[s]:
+                if s != self.mparams.order[0] and not self.scanner_checkpoints[s]:
                     newshift = True
                     shift_scanner = s
             if newshift:
                 print('new shift to', shift_scanner)
-                exp_name = utils.get_expname(self.hparams)
+                exp_name = utils.get_expname(self.mparams)
                 weights_path = self.modeldir + exp_name + '_shift_' + shift_scanner + '.pt'
                 torch.save(self.model.state_dict(), weights_path)
                 self.scanner_checkpoints[shift_scanner] = True
 
-        if self.hparams.use_memory:
+        if self.mparams.use_memory:
             #y = y[:, None]
             self.grammatrices = []
-            if x.size()[1] == 1 and self.hparams.dim != 3:
+            if x.size()[1] == 1 and self.mparams.dim != 3:
                 xstyle = torch.cat([x, x, x], dim=1)
             elif type(x) is list or type(x) is tuple:
                 xstyle = torch.stack(x)
@@ -255,9 +255,9 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
             train_a_step = self.insert_element(x, y, filepath, scanner)
 
             if train_a_step:
-                x, y = self.trainingsmemory.get_training_batch(self.hparams.batch_size,
+                x, y = self.trainingsmemory.get_training_batch(self.mparams.batch_size,
                                                                  batches=int(
-                                                                     self.hparams.training_batch_size / self.hparams.batch_size))
+                                                                     self.mparams.training_batch_size / self.mparams.batch_size))
                 self.train_counter += 1
             else:
                 return None
@@ -274,26 +274,26 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
         return torch.optim.Adam(self.parameters(), lr=self.learning_rate)
 
     def train_dataloader(self):
-        if self.hparams.continuous:
-            return DataLoader(self.TaskDatasetContinuous(self.hparams.datasetfile,
-                                                         transition_phase_after=self.hparams.transition_phase_after,
-                                                         seed=self.hparams.seed,
-                                                         order=self.hparams.order),
-                              batch_size=self.hparams.batch_size, num_workers=8, drop_last=True,
+        if self.mparams.continuous:
+            return DataLoader(self.TaskDatasetContinuous(self.mparams.datasetfile,
+                                                         transition_phase_after=self.mparams.transition_phase_after,
+                                                         seed=self.mparams.seed,
+                                                         order=self.mparams.order),
+                              batch_size=self.mparams.batch_size, num_workers=8, drop_last=True,
                               collate_fn=self.collate_fn)
         else:
-            return DataLoader(self.TaskDatasetBatch(self.hparams.datasetfile,
-                                                    iterations=self.hparams.noncontinuous_steps,
-                                                    batch_size=self.hparams.batch_size,
-                                                    split=self.hparams.noncontinuous_train_splits,
-                                                    res=self.hparams.scanner,
-                                                    seed=self.hparams.seed),
-                              batch_size=self.hparams.batch_size, num_workers=8, collate_fn=self.collate_fn)
+            return DataLoader(self.TaskDatasetBatch(self.mparams.datasetfile,
+                                                    iterations=self.mparams.noncontinuous_steps,
+                                                    batch_size=self.mparams.batch_size,
+                                                    split=self.mparams.noncontinuous_train_splits,
+                                                    res=self.mparams.scanner,
+                                                    seed=self.mparams.seed),
+                              batch_size=self.mparams.batch_size, num_workers=8, collate_fn=self.collate_fn)
 
     #@pl.data_loader
     def val_dataloader(self):
-        return DataLoader(self.TaskDatasetBatch(self.hparams.datasetfile,
-                                                split='val', res=self.hparams.order),
+        return DataLoader(self.TaskDatasetBatch(self.mparams.datasetfile,
+                                                split='val', res=self.mparams.order),
                           batch_size=4,
                           num_workers=2,
                           collate_fn=self.collate_fn)

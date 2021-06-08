@@ -10,14 +10,14 @@ import numpy as np
 
 class LIDCActiveDynamicMemory(ActiveDynamicMemoryModel):
 
-    def __init__(self, hparams={}, modeldir=None, device=torch.device('cpu'), training=True):
+    def __init__(self, mparams={}, modeldir=None, device=torch.device('cpu'), training=True):
         super(ActiveDynamicMemoryModel, self).__init__()
         self.TaskDatasetBatch = LIDCBatch
         self.TaskDatasetContinuous = LIDCContinuous
 
         self.collate_fn = lutils.collate_fn
 
-        self.init(hparams=hparams, modeldir=modeldir, device=device, training=training)
+        self.init(mparams=mparams, modeldir=modeldir, device=device, training=training)
 
 
     def get_task_metric(self, image, target):
@@ -91,7 +91,7 @@ class LIDCActiveDynamicMemory(ActiveDynamicMemoryModel):
         :param m: value to compare to the threshold
         :return: Wheter or not the domain is considered completed
         """
-        return m>self.hparams.completion_limit
+        return m>self.mparams.completion_limit
 
     def validation_step(self, batch, batch_idx):
         self.grammatrices = []
@@ -131,7 +131,7 @@ class LIDCActiveDynamicMemory(ActiveDynamicMemoryModel):
         recalls = dict()
         precision = dict()
 
-        for scanner in self.hparams.order:
+        for scanner in self.mparams.order:
             overall_true_pos[scanner] = dict()
             overall_false_pos[scanner] = dict()
             overall_false_neg[scanner] = dict()
@@ -184,7 +184,7 @@ class LIDCActiveDynamicMemory(ActiveDynamicMemoryModel):
 
         aps = dict()
 
-        for scanner in self.hparams.order:
+        for scanner in self.mparams.order:
             for k in np.arange(0.0, 1.01, 0.05):
                 if (overall_false_neg[scanner][k] + overall_true_pos[scanner][k]) == 0:
                     recalls[scanner].append(0.0)
@@ -241,7 +241,7 @@ class LIDCActiveDynamicMemory(ActiveDynamicMemoryModel):
 
         bious = []
 
-        for i in range(self.hparams.uncertainty_iterations):
+        for i in range(self.mparams.uncertainty_iterations):
             out = self.forward(x)
             boxes, scores = lutils.filter_boxes_area(out[0]['boxes'].cpu().detach().numpy(),
                                                      out[0]['scores'].cpu().detach().numpy(), min_score=0.2)

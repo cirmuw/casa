@@ -9,7 +9,7 @@ import numpy as np
 
 class BrainAgeActiveDynamicMemory(ActiveDynamicMemoryModel):
 
-    def __init__(self, hparams={}, modeldir=None, device=torch.device('cpu'), training=True):
+    def __init__(self, mparams={}, modeldir=None, device=torch.device('cpu'), training=True):
         super(ActiveDynamicMemoryModel, self).__init__()
         self.collate_fn = None
         self.TaskDatasetBatch = BrainAgeBatch
@@ -17,7 +17,7 @@ class BrainAgeActiveDynamicMemory(ActiveDynamicMemoryModel):
 
         self.mae = nn.L1Loss()
         self.loss = nn.MSELoss()
-        self.init(hparams=hparams, modeldir=modeldir, device=device, training=training)
+        self.init(mparams=mparams, modeldir=modeldir, device=device, training=training)
 
 
     def get_task_metric(self, image, target):
@@ -43,7 +43,7 @@ class BrainAgeActiveDynamicMemory(ActiveDynamicMemoryModel):
         :param load_stylemodel: If true loads the style model (needed for training)
         :return: loaded model, stylemodel and gramlayers
         """
-        model = agemodels.EncoderRegressor(droprate=droprate, fulldrop=self.hparams.fulldrop)
+        model = agemodels.EncoderRegressor(droprate=droprate, fulldrop=self.mparams.fulldrop)
 
         if load_stylemodel:
             stylemodel = EncoderModelGenesis()
@@ -69,7 +69,7 @@ class BrainAgeActiveDynamicMemory(ActiveDynamicMemoryModel):
         :param m: value to compare to the threshold
         :return: Wheter or not the domain is considered completed
         """
-        return m<self.hparams.completion_limit
+        return m<self.mparams.completion_limit
 
     def validation_step(self, batch, batch_idx):
         """
@@ -109,7 +109,7 @@ class BrainAgeActiveDynamicMemory(ActiveDynamicMemoryModel):
     def get_uncertainties(self, x):
         output = []
 
-        for i in range(self.hparams.uncertainty_iterations):
+        for i in range(self.mparams.uncertainty_iterations):
             outy = self.forward(x)
             output.append([o[0] for o in outy.detach().cpu().numpy()])
 

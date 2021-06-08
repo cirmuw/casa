@@ -22,7 +22,7 @@ trainparams:
     base_model: 'brainage_batch_brainds_split_val_test_melba_base_1_1108d7c066.pt'
     val_check_interval: 10
     memorymaximum: 64
-    completion_limit: 0.75
+    completion_limit: 7.0
     droprate: 0.1
     fulldrop: True
     learning_rate: 0.0001
