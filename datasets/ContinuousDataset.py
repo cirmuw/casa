@@ -45,8 +45,9 @@ class ContinuousDataset(Dataset):
             while old_idx <= old_max and (i / ((old_max - old_end) * 2) < 1):
                 take_newclass = np.random.binomial(1, min(i / ((old_max - old_end) * 2), 1))
                 if take_newclass:
-                    combds = combds.append(new.iloc[new_idx])
-                    new_idx += 1
+                    if new_idx<len(new):
+                        combds = combds.append(new.iloc[new_idx])
+                        new_idx += 1
                 else:
                     combds = combds.append(old.iloc[old_idx])
                     old_idx += 1
