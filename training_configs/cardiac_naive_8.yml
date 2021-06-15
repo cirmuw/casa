@@ -7,8 +7,8 @@ settings:
 trainparams:
     method: 'naive'
     task: 'cardiac'
-    naive_insert_rate: 20
-    startbudget: 860
+    naive_insert_rate: 8
+    startbudget: 537
     continuous: True
     use_memory: True
     random_cache: True

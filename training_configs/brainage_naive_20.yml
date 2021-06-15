@@ -5,27 +5,27 @@ settings:
     RESULT_DIR: '/project/catinous/active_catinous/MELBA/output/results/'
 
 trainparams:
-    method: 'uncertainty'
-    task: 'cardiac'
-    startbudget: 860
-    uncertainty_threshold: 0.03
-    uncertainty_iterations: 20
+    task: 'brainage'
+    method: 'naive'
+    startbudget: 95
+    naive_insert_rate: 20
     continuous: True
     use_memory: True
     random_cache: True
-    datasetfile: '/project/catinous/cardiacslicessplitsingle.csv'
+    datasetfile: '/project/catinous/brainds_split_val_test_melba.csv'
     transition_phase_after: 0.8
-    batch_size: 4
-    training_batch_size: 8
-    order: ['Siemens', 'GE', 'Philips', 'Canon']
+    batch_size: 2
+    training_batch_size: 4
+    order: ['1.5T Philips', '1.5T', '3.0T', '3.0T Philips'] #this is very dependend on the order!
     scanner: null
-    base_model: 'cardiac_batch_cardiacslicessplitsingle_base_1_d885e299cf.pt'
-    run_postfix: 1
+    base_model: 'brainage_batch_brainds_split_val_test_melba_base_1_1108d7c066.pt'
     val_check_interval: 10
-    memorymaximum: 128
-    droprate: 0.25
+    memorymaximum: 64
+    droprate: 0.1
+    fulldrop: True
     learning_rate: 0.0001
     gradient_clip_val: 0.5
     allowedlabelratio: 0
-    dim: 2
+    dim: 3
+    run_postfix: 1
     seed: 1

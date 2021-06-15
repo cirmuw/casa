@@ -134,7 +134,8 @@ class CardiacActiveDynamicMemory(ActiveDynamicMemoryModel):
 
         for i in range(len(x)):
             y_hat_detach = [t.detach().cpu().numpy() for t in y_hat_flats]
-            uncertainties.append(np.array(y_hat_detach).std(axis=0)[i].mean())
+            #uncertainties.append(np.array(y_hat_detach).std(axis=0)[i].mean())
+            uncertainties.append(np.quantile(np.array(y_hat_detach).std(axis=0)[i], 0.95))
 
         return uncertainties
 

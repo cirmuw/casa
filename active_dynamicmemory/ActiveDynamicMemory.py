@@ -308,6 +308,11 @@ class UncertaintyDynamicMemory(DynamicMemory):
         self.uncertainty_threshold = kwargs['uncertainty_threshold']
         self.forceitems = []
 
+        if 'random_insert' in kwargs:
+            self.random_insert = True
+        else:
+            self.random_insert = False
+
     def insert_element(self, item, uncertainty, budget, model):
         if budget>0 and uncertainty>self.uncertainty_threshold:
             print('insert element of type', item.scanner, budget)
@@ -317,20 +322,26 @@ class UncertaintyDynamicMemory(DynamicMemory):
                 self.labeling_counter += 1
                 budget-=1
             else:
-                assert (item.current_grammatrix is not None)
-                insertidx = -1
-                mingramloss = 1000
-                for j, mi in enumerate(self.memorylist):
-                    loss = F.mse_loss(torch.tensor(item.current_grammatrix), torch.tensor(mi.current_grammatrix),
-                                      reduction='mean')
+                if self.random_insert:
+                    insertidx = random.randint(0, len(self.memorylist)-1)
 
-                    if loss < mingramloss:
-                        mingramloss = loss
-                        insertidx = j
-                print('insert position', insertidx)
-                self.memorylist[insertidx] = item
-                self.forceitems.append(item)
-                self.labeling_counter += 1
+                    self.memorylist[insertidx] = item
+                    self.forceitems.append(item)
+                    self.labeling_counter += 1
+                else:
+                    assert (item.current_grammatrix is not None)
+                    insertidx = -1
+                    mingramloss = 1000
+                    for j, mi in enumerate(self.memorylist):
+                        loss = F.mse_loss(torch.tensor(item.current_grammatrix), torch.tensor(mi.current_grammatrix),
+                                          reduction='mean')
+
+                        if loss < mingramloss:
+                            mingramloss = loss
+                            insertidx = j
+                    self.memorylist[insertidx] = item
+                    self.forceitems.append(item)
+                    self.labeling_counter += 1
                 budget-=1
 
             scanners = dict()

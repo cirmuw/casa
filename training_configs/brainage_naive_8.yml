@@ -6,20 +6,26 @@ settings:
 
 trainparams:
     task: 'brainage'
-    continuous: False
-    use_memory: False
+    method: 'naive'
+    startbudget: 537
+    naive_insert_rate: 8
+    continuous: True
+    use_memory: True
+    random_cache: True
     datasetfile: '/project/catinous/brainds_split_val_test_melba.csv'
-    batch_size: 8
-    noncontinuous_steps: 4000
-    noncontinuous_train_splits: ['base']
-    order: ['1.5T Philips', '1.5T', '3.0T', '3.0T Philips']
+    transition_phase_after: 0.8
+    batch_size: 2
+    training_batch_size: 4
+    order: ['1.5T Philips', '1.5T', '3.0T', '3.0T Philips'] #this is very dependend on the order!
     scanner: null
-    base_model: null
-    run_postfix: 1
-    val_check_interval: 200
+    base_model: 'brainage_batch_brainds_split_val_test_melba_base_1_1108d7c066.pt'
+    val_check_interval: 10
+    memorymaximum: 64
     droprate: 0.1
+    fulldrop: True
     learning_rate: 0.0001
-    gradient_clip_val: 0
+    gradient_clip_val: 0.5
+    allowedlabelratio: 0
     dim: 3
-    fulldrop: False
+    run_postfix: 1
     seed: 1
