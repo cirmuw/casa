@@ -7,7 +7,7 @@ settings:
 trainparams:
     method: 'casa'
     startbudget: 430
-    outlier_distance: 0.08
+    outlier_distance: 0.03 # 0.08
     continuous: True
     use_memory: True
     random_cache: True
@@ -23,7 +23,7 @@ trainparams:
     run_postfix: 1
     val_check_interval: 10
     memorymaximum: 128
-    completion_limit: 0.75
+    completion_limit: 0.70 #0.75
     droprate: 0.25
     learning_rate: 0.0001
     gradient_clip_val: 0.5

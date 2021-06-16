@@ -139,8 +139,9 @@ class CasaDynamicMemory(DynamicMemory):
             self.transformer = None
             trans_initelements = graminits
 
-        clf = IsolationForest(n_estimators=10, random_state=self.seed).fit(trans_initelements)
+        clf = IsolationForest(n_estimators=10, random_state=self.seed, warm_start=True, contamination=0.10).fit(trans_initelements)
         self.isoforests = {0: clf}
+        print('trans_init', trans_initelements[0].shape, len(trans_initelements))
 
         self.domaincomplete = {0: True}
 
@@ -160,10 +161,13 @@ class CasaDynamicMemory(DynamicMemory):
             outlier_grams = [o.current_grammatrix for o in self.outlier_memory]
 
             distances = squareform(pdist(outlier_grams))
+            print('outlier distance', sorted([np.array(sorted(d)[:6]).sum() for d in distances]), sorted([np.array(sorted(d)[:6]).sum() for d in distances])[5])
             if sorted([np.array(sorted(d)[:6]).sum() for d in distances])[5]<self.outlier_distance:
 
                 clf = IsolationForest(n_estimators=5, random_state=self.seed, warm_start=True, contamination=0.10).fit(
                     outlier_grams)
+
+                print('outlier grams', outlier_grams[0].shape, len(outlier_grams))
 
                 new_domain_label = len(self.isoforests)
                 self.domaincomplete[new_domain_label] = False
@@ -233,7 +237,6 @@ class CasaDynamicMemory(DynamicMemory):
         domain = self.check_pseudodomain(item.current_grammatrix)
         item.pseudo_domain = domain
 
-        print('detected domain', domain)
         if domain==-1:
             #insert into outlier memory
             #check outlier memory for new clusters
@@ -309,9 +312,11 @@ class UncertaintyDynamicMemory(DynamicMemory):
         self.forceitems = []
 
         if 'random_insert' in kwargs:
-            self.random_insert = True
+            self.random_insert = kwargs['random_insert']
         else:
             self.random_insert = False
+
+        print(self.random_insert, 'random insert')
 
     def insert_element(self, item, uncertainty, budget, model):
         if budget>0 and uncertainty>self.uncertainty_threshold:

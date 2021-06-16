@@ -93,6 +93,7 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
                             batch_size=self.mparams.batch_size, num_workers=4, pin_memory=True, collate_fn=self.collate_fn)
 
         memoryitems = []
+        self.grammatrices = []
         for batch in dl:
             torch.cuda.empty_cache()
 
@@ -223,8 +224,6 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
 
     def training_step(self, batch, batch_idx):
         x, y, scanner, filepath = batch
-
-
 
         self.grammatrices = []
 
