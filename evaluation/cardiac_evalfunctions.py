@@ -15,7 +15,7 @@ from matplotlib.colors import ListedColormap
 from monai.metrics import DiceMetric
 import monai.networks.utils as mutils
 
-def eval_cardiac(params, outfile, split=['test']):
+def eval_cardiac(params, outfile, split='test'):
     """
     Base evaluation for cardiac on image level, stored to an outputfile
     """
@@ -65,7 +65,7 @@ def eval_cardiac(params, outfile, split=['test']):
     df_results = pd.DataFrame({'scanner': scanners, 'dice_lv': dice_lv, 'dice_myo': dice_myo, 'dice_rv': dice_rv, 'dice_mean': dice_mean, 'shift': shifts})
     df_results.to_csv(outfile, index=False)
 
-def eval_cardiac_batch(params, outfile, split=['test']):
+def eval_cardiac_batch(params, outfile, split='test'):
     dl_test = DataLoader(CardiacBatch(params['trainparams']['datasetfile'], split=split), batch_size=16)
     model, _, _, _ = rutils.trained_model(params['trainparams'], params['settings'], training=False)
 
@@ -119,24 +119,24 @@ def eval_cardiac_dl(model, dl, device='cuda'):
 
     return scanners, dice_lv, dice_myo, dice_rv, dice_mean, img
 
-def eval_params(params, split=['test']):
+def eval_params(params, split='test'):
     settings = argparse.Namespace(**params['settings'])
 
     expname = admutils.get_expname(params['trainparams'])
     order = params['trainparams']['order'].copy()
 
-    if not os.path.exists(f'{settings.RESULT_DIR}/cache/{expname}_dicescores.csv'):
+    if not os.path.exists(f'{settings.RESULT_DIR}/cache/{expname}_{split}_dicescores.csv'):
         if params['trainparams']['continuous'] == False:
-            eval_cardiac_batch(params, f'{settings.RESULT_DIR}/cache/{expname}_dicescores.csv', split=split)
+            eval_cardiac_batch(params, f'{settings.RESULT_DIR}/cache/{expname}_{split}_dicescores.csv', split=split)
         else:
-            eval_cardiac(params, f'{settings.RESULT_DIR}/cache/{expname}_dicescores.csv', split=split)
+            eval_cardiac(params, f'{settings.RESULT_DIR}/cache/{expname}_{split}_dicescores.csv', split=split)
 
     if params['trainparams']['continuous'] == False:
-        df = pd.read_csv(f'{settings.RESULT_DIR}/cache/{expname}_dicescores.csv')
+        df = pd.read_csv(f'{settings.RESULT_DIR}/cache/{expname}_{split}_dicescores.csv')
         df_temp = df.groupby(['scanner']).mean().reset_index()
         return df_temp
 
-    df = pd.read_csv(f'{settings.RESULT_DIR}/cache/{expname}_dicescores.csv')
+    df = pd.read_csv(f'{settings.RESULT_DIR}/cache/{expname}_{split}_dicescores.csv')
     df_temp = df.groupby(['scanner', 'shift']).mean().reset_index()
 
     df_res = df_temp.loc[df_temp['shift'] == 'None']
@@ -182,7 +182,7 @@ def eval_params(params, split=['test']):
 
     return df_res
 
-def eval_config(configfile, seeds=None, name=None, split=['test']):
+def eval_config(configfile, seeds=None, name=None, split='test'):
     with open(configfile) as f:
         params = yaml.load(f, Loader=yaml.FullLoader)
     if seeds is None:

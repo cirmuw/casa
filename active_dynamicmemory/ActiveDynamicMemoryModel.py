@@ -81,7 +81,7 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
                                                       memorymaximum=self.mparams.memorymaximum,
                                                       seed=self.mparams.seed,
                                                       uncertainty_threshold=self.mparams.uncertainty_threshold,
-                                                      random_insert=True)
+                                                      random_insert=self.mparams.random_insert)
 
             self.insert_element = self.insert_element_uncertainty
 
