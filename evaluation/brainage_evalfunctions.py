@@ -9,14 +9,14 @@ import active_dynamicmemory.utils as admutils
 import os
 import yaml
 
-def eval_brainage(params, outfile):
+def eval_brainage(params, outfile, split=['test']):
     """
     Base evaluation for brainage on image level, stored to an outputfile
     """
 
     device = torch.device('cuda')
 
-    dl_test = DataLoader(BrainAgeBatch(params['trainparams']['datasetfile'], split=['test']), batch_size=8)
+    dl_test = DataLoader(BrainAgeBatch(params['trainparams']['datasetfile'], split=split), batch_size=8)
     model, _, _, _ = rutils.trained_model(params['trainparams'], params['settings'], training=False)
 
     model.to(device)
@@ -51,8 +51,8 @@ def eval_brainage(params, outfile):
     df_results.to_csv(outfile, index=False)
 
 
-def eval_brainage_batch(params, outfile):
-    dl_test = DataLoader(BrainAgeBatch(params['trainparams']['datasetfile'], split=['test']), batch_size=8)
+def eval_brainage_batch(params, outfile, split=['test']):
+    dl_test = DataLoader(BrainAgeBatch(params['trainparams']['datasetfile'], split=split), batch_size=8)
     model, _, _, _ = rutils.trained_model(params['trainparams'], params['settings'], training=False)
 
     scanners, aes, img =  eval_brainage_dl(model, dl_test)
@@ -83,24 +83,23 @@ def eval_brainage_dl(model, dl, device='cuda'):
 
 
 
-def eval_params(params):
+def eval_params(params, split='test'):
     settings = argparse.Namespace(**params['settings'])
-
     expname = admutils.get_expname(params['trainparams'])
-    order = params['trainparams']['order']
+    order = params['trainparams']['order'].copy()
 
-    if not os.path.exists(f'{settings.RESULT_DIR}/cache/{expname}_AEs.csv'):
+    if not os.path.exists(f'{settings.RESULT_DIR}/cache/{expname}_{split}_AEs.csv'):
         if params['trainparams']['continuous'] == False:
-            eval_brainage_batch(params, f'{settings.RESULT_DIR}/cache/{expname}_AEs.csv')
+            eval_brainage_batch(params, f'{settings.RESULT_DIR}/cache/{expname}_{split}_AEs.csv', split=split)
         else:
-            eval_brainage(params, f'{settings.RESULT_DIR}/cache/{expname}_AEs.csv')
+            eval_brainage(params, f'{settings.RESULT_DIR}/cache/{expname}_{split}_AEs.csv', split=split)
 
     if params['trainparams']['continuous'] == False:
-        df = pd.read_csv(f'{settings.RESULT_DIR}/cache/{expname}_AEs.csv')
+        df = pd.read_csv(f'{settings.RESULT_DIR}/cache/{expname}_{split}_AEs.csv')
         df_temp = df.groupby(['scanner']).mean().reset_index()
         return df_temp
 
-    df = pd.read_csv(f'{settings.RESULT_DIR}/cache/{expname}_AEs.csv')
+    df = pd.read_csv(f'{settings.RESULT_DIR}/cache/{expname}_{split}_AEs.csv')
     df_temp = df.groupby(['scanner', 'shift']).mean().reset_index()
 
     df_res = df_temp.loc[df_temp['shift'] == 'None']
@@ -128,11 +127,11 @@ def eval_params(params):
     return df_res
 
 
-def eval_config(configfile, seeds=None, name=None):
+def eval_config(configfile, seeds=None, name=None, split=['test']):
     with open(configfile) as f:
         params = yaml.load(f, Loader=yaml.FullLoader)
     if seeds is None:
-        df = eval_params(params)
+        df = eval_params(params, split=split)
         if name is not None:
             df['model'] = name
         return df
@@ -141,7 +140,7 @@ def eval_config(configfile, seeds=None, name=None):
         for i, seed in enumerate(seeds):
             params['trainparams']['seed'] = seed
             params['trainparams']['run_postfix'] = i+1
-            df_temp = eval_params(params)
+            df_temp = eval_params(params, split=split)
             df_temp['seed'] = seed
             if name is not None:
                 df_temp['model'] = name
@@ -149,14 +148,14 @@ def eval_config(configfile, seeds=None, name=None):
 
         return df
 
-def eval_config_list(configfiles, names, seeds=None, value='mean'):
+def eval_config_list(configfiles, names, seeds=None, value='mean', split=['test']):
     assert type(configfiles) is list, 'configfiles should be a list'
     assert type(names) is list, 'method names should be a list'
     assert len(configfiles) == len(names), 'configfiles and method names should match'
 
     df_overall = pd.DataFrame()
     for k, configfile in enumerate(configfiles):
-        df_conf = eval_config(configfile, seeds, names[k])
+        df_conf = eval_config(configfile, seeds, names[k], split=split)
         df_overall = df_overall.append(df_conf)
 
     df_overview = df_overall.groupby(['model', 'scanner']).mean().reset_index()

@@ -29,3 +29,4 @@ trainparams:
     allowedlabelratio: 0
     dim: 2
     seed: 1
+    random_insert: False

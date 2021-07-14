@@ -7,8 +7,8 @@ settings:
 trainparams:
     task: 'brainage'
     method: 'naive'
-    startbudget: 95
-    naive_insert_rate: 20
+    startbudget: 378
+    naive_insert_rate: 5
     continuous: True
     use_memory: True
     random_cache: True
@@ -18,7 +18,7 @@ trainparams:
     training_batch_size: 4
     order: ['1.5T Philips', '1.5T', '3.0T', '3.0T Philips'] #this is very dependend on the order!
     scanner: null
-    base_model: 'brainage_batch_brainds_split_val_test_melba_base_1_1108d7c066.pt'
+    base_model: 'brainage_batch_brainds_split_val_test_melba_base_1_9fd356bd91.pt'
     val_check_interval: 10
     memorymaximum: 64
     droprate: 0.1
