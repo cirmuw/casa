@@ -21,9 +21,9 @@ trainparams:
     base_model: 'brainage_batch_brainds_split_val_test_melba_base_1_9fd356bd91.pt'
     val_check_interval: 10
     memorymaximum: 64
-    droprate: 0.1
+    droprate: 0.0
     fulldrop: True
-    learning_rate: 0.0001
+    learning_rate: 0.00001
     gradient_clip_val: 0.5
     allowedlabelratio: 0
     dim: 3

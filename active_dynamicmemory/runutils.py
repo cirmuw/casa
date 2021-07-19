@@ -128,8 +128,12 @@ def get_expname(mparams):
     return expname
 
 def save_memory_to_csv(memory, savepath):
+    if type(memory[0].target) is dict:
+        target = [e.target for e in memory]
+    else:
+        target = [e.target.cpu().numpy() for e in memory]
     df_memory = pd.DataFrame({'filepath':[e.filepath for e in memory],
-                             'target': [e.target.cpu().numpy() for e in memory],
+                             'target': target,
                              'scanner': [e.scanner for e in memory],
                              'pseudodomain': [e.pseudo_domain for e in memory]})
     df_memory.to_csv(savepath, index=False, index_label=False)

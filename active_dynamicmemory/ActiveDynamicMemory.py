@@ -237,6 +237,8 @@ class CasaDynamicMemory(DynamicMemory):
         domain = self.check_pseudodomain(item.current_grammatrix)
         item.pseudo_domain = domain
 
+        print('predicted domain', domain)
+
         if domain==-1:
             #insert into outlier memory
             #check outlier memory for new clusters
@@ -261,6 +263,8 @@ class CasaDynamicMemory(DynamicMemory):
                 self.labeling_counter += 1
                 self.domainMetric[domain].append(model.get_task_metric(item.img, item.target))
 
+                print('inserting sample', item.scanner)
+
                 # add tree to clf of domain
                 clf = self.isoforests[domain]
                 domain_items = self.get_domainitems(domain)
@@ -270,7 +274,7 @@ class CasaDynamicMemory(DynamicMemory):
                     n_estimators = len(clf.estimators_) + 1
                     clf.__setattr__('n_estimators', n_estimators)
                 else:
-                    clf = IsolationForest(n_estimators=10, random_state=16131345)
+                    clf = IsolationForest(n_estimators=10)
 
                 clf.fit(domain_grams)
                 self.isoforests[domain] = clf
@@ -288,7 +292,7 @@ class CasaDynamicMemory(DynamicMemory):
 
         for j, clf in self.isoforests.items():
             current_pred = clf.decision_function(grammatrix.reshape(1, -1))
-
+            #print('iso forest pred', current_pred, current_domain)
             if current_pred>max_pred:
                 current_domain = j
                 max_pred = current_pred

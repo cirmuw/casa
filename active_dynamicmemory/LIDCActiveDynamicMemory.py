@@ -29,6 +29,8 @@ class LIDCActiveDynamicMemory(ActiveDynamicMemoryModel):
         """
         self.eval()
 
+        gt=target['boxes']
+
         out = self.model(image[None, :, :].to(self.device))
 
         out_boxes = [
@@ -46,11 +48,14 @@ class LIDCActiveDynamicMemory(ActiveDynamicMemoryModel):
             final_scores.append(fs)
 
         ious = []
-        for t in target:
+        for t in gt:
             for i, b in enumerate(final_boxes[0]):
                 ious.append(float(final_scores[0][i]) * lutils.bb_intersection_over_union(t, b))
         self.train()
-        return np.array(ious).mean()
+        if len(ious)>0:
+            return np.array(ious).max()
+        else:
+            return 0
 
 
     def load_model_stylemodel(self, droprate, load_stylemodel=False):
@@ -77,7 +82,7 @@ class LIDCActiveDynamicMemory(ActiveDynamicMemoryModel):
 
         if load_stylemodel:
             stylemodel = models.resnet50(pretrained=True)
-            gramlayers = [stylemodel.layer1[-1].conv1]
+            gramlayers = [stylemodel.layer2[-1].conv1]
             stylemodel.eval()
 
             return model, stylemodel, gramlayers

@@ -108,6 +108,7 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
                 xstyle = torch.cat([x, x, x], dim=1)
             else:
                 xstyle = x
+
             _ = self.stylemodel(xstyle)
 
             for i, f in enumerate(filepath):
@@ -192,6 +193,7 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
                 if not v:
                     if len(self.trainingsmemory.domainMetric[k]) == self.mparams.len_perf_queue:
                         mean_metric = np.mean(self.trainingsmemory.domainMetric[k])
+                        print(mean_metric, k)
                         if self.completed_domain(mean_metric):
                             self.trainingsmemory.domaincomplete[k] = True
             return True
@@ -244,10 +246,10 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
         if self.mparams.use_memory:
             #y = y[:, None]
             self.grammatrices = []
-            if x.size()[1] == 1 and self.mparams.dim != 3:
-                xstyle = torch.cat([x, x, x], dim=1)
-            elif type(x) is list or type(x) is tuple:
+            if type(x) is list or type(x) is tuple:
                 xstyle = torch.stack(x)
+            elif x.size()[1] == 1 and self.mparams.dim != 3:
+                xstyle = torch.cat([x, x, x], dim=1)
             else:
                 xstyle = x
             _ = self.stylemodel(xstyle)

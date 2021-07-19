@@ -17,7 +17,7 @@ trainparams:
     transition_phase_after: 0.8
     batch_size: 2
     training_batch_size: 4
-    order: ['1.5T Philips', '1.5T', '3.0T Philips', '3.0T']
+    order: ['1.5T Philips', '1.5T',  '3.0T', '3.0T Philips',]
     scanner: null
     base_model: 'brainage_batch_brainds_split_val_test_melba_base_1_9fd356bd91.pt'
     val_check_interval: 10

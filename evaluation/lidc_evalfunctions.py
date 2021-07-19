@@ -6,10 +6,11 @@ import active_dynamicmemory.runutils as rutils
 import numpy as np
 import pandas as pd
 import active_dynamicmemory.utils as admutils
+import yaml
 
 def ap_model_mparams(mparams, split='test', scanners=['ges', 'geb', 'sie', 'time_siemens'], dspath='/project/catinous/lungnodulesfinalpatientsplit.csv'):
     device = torch.device('cuda')
-    model, _, _, _ = rutils.trained_model(mparams, training=False)
+    model, _, _, _ = rutils.trained_model(mparams['trainparams'], mparams['settings'], training=False)
     model.to(device)
     model.eval()
     recalls, precision = ap_model(model, split, scanners=scanners, dspath=dspath)
@@ -116,16 +117,16 @@ def recall_precision_to_ap(recalls, precisions, scanners=['ges', 'geb', 'sie', '
         aps[res] = np.array(ap).mean()
     return aps
 
-def get_ap_for_res(mparams, split='test', shifts=None, scanners=['ges', 'geb', 'sie', 'time_siemens'], dspath='/project/catinous/lungnodulesfinalpatientsplit.csv'):
+def get_ap_for_res(params, split='test', shifts=None, scanners=['ges', 'geb', 'sie', 'time_siemens'], dspath='/project/catinous/lungnodulesfinalpatientsplit.csv'):
     device = torch.device('cuda')
-    recalls, precisions, model = ap_model_mparams(mparams, split, scanners=scanners, dspath=dspath)
+    recalls, precisions, model = ap_model_mparams(params, split, scanners=scanners, dspath=dspath)
     aps = recall_precision_to_ap(recalls, precisions, scanners=scanners)
     df_aps = pd.DataFrame([aps])
 
     if shifts is not None:
         df_aps['shift'] = 'None'
 
-        modelpath = rutils.cached_path(mparams)
+        modelpath = rutils.cached_path(params)
 
         for s in shifts:
             shiftmodelpath = f'{modelpath[:-3]}_shift_{s}.pt'
@@ -141,22 +142,26 @@ def get_ap_for_res(mparams, split='test', shifts=None, scanners=['ges', 'geb', '
             df_aps = df_aps.append(aps)
     return df_aps
 
-def eval_lidc_cont(mparams, seeds=None, split='test', shifts=None, postfixes=None, scanners=['ges', 'geb', 'sie', 'time_siemens'], dspath='/project/catinous/lungnodulesfinalpatientsplit.csv'):
+def eval_lidc_cont(params, seeds=None, split='test', shifts=None, scanners=['ges', 'geb', 'sie', 'lndb'], dspath='/project/catinous/lungnodulesfinallndbBig.csv'):
     print('eval for', scanners)
-    outputfile = f'/project/catinous/results/lidc/{admutils.get_expname(mparams)}_meanaverageprecision.csv'
+    #outputfile = f'/project/catinous/results/lidc/{admutils.get_expname(mparams)}_meanaverageprecision.csv'
     seeds_aps = pd.DataFrame()
 
     if seeds is not None:
         for i, seed in enumerate(seeds):
-            mparams['seed'] = seed
-            mparams['run_postfix'] = i+1
-            aps = get_ap_for_res(mparams, split=split, shifts=shifts, scanners=scanners, dspath=dspath)
+            params['trainparams']['seed'] = seed
+            params['trainparams']['run_postfix'] = i+1
+            aps = get_ap_for_res(params['trainparams'], split=split, shifts=shifts, scanners=scanners, dspath=dspath)
             aps['seed'] = seed
             seeds_aps = seeds_aps.append(aps)
     else:
-        for i in range(postfixes):
-            mparams['run_postfix'] = i+1
-            aps = get_ap_for_res(mparams, split=split, shifts=shifts, scanners=scanners, dspath=dspath)
-            seeds_aps = seeds_aps.append(aps)
+        aps = get_ap_for_res(params['trainparams'], split=split, shifts=shifts, scanners=scanners, dspath=dspath)
+        seeds_aps = seeds_aps.append(aps)
 
-    seeds_aps.to_csv(outputfile, index=False)
+    #seeds_aps.to_csv(outputfile, index=False)
+    
+def val_data_for_config(configfile, seeds=None):
+    with open(configfile) as f:
+        params = yaml.load(f, Loader=yaml.FullLoader)
+
+    return eval_lidc_cont(params, seeds=seeds)
