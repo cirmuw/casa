@@ -12,7 +12,7 @@ trainparams:
     continuous: True
     use_memory: True
     random_cache: True
-    transformgrams: False
+    transformgrams: True
     datasetfile: '/project/catinous/lungnodulesfinallndbBig.csv'
     transition_phase_after: 0.8
     batch_size: 4
@@ -23,7 +23,7 @@ trainparams:
     run_postfix: 1
     val_check_interval: 20
     memorymaximum: 128
-    completion_limit: 0.5 #this is iou!
+    completion_limit: 0.4 #this is iou!
     droprate: 0.0
     learning_rate: 0.00001
     gradient_clip_val: 0.5
