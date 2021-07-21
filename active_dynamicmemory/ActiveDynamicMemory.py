@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from scipy.spatial.distance import pdist, squareform
 from sklearn.ensemble import IsolationForest
+from sklearn.decomposition import PCA
 from sklearn.random_projection import SparseRandomProjection
 import collections
 import numpy as np
@@ -128,7 +129,8 @@ class CasaDynamicMemory(DynamicMemory):
             graminits.append(mi.current_grammatrix)
         print('gram matrix init elements', initelements[0].current_grammatrix.shape)
         if kwargs['transformgrams']:
-            self.transformer = SparseRandomProjection(random_state=self.seed, n_components=30)
+            #self.transformer = SparseRandomProjection(random_state=self.seed, n_components=30)
+            self.transformer = PCA(random_state=self.seed, n_components=30)
             self.transformer.fit(graminits)
             print('fit sparse projection')
             for mi in initelements:
@@ -139,7 +141,7 @@ class CasaDynamicMemory(DynamicMemory):
             self.transformer = None
             trans_initelements = graminits
 
-        clf = IsolationForest(n_estimators=10, random_state=self.seed, warm_start=True, contamination=0.10).fit(trans_initelements)
+        clf = IsolationForest(n_estimators=10, random_state=self.seed, bootstrap=True, warm_start=True, contamination=0.10).fit(trans_initelements)
         self.isoforests = {0: clf}
         print('trans_init', trans_initelements[0].shape, len(trans_initelements))
 
@@ -164,7 +166,7 @@ class CasaDynamicMemory(DynamicMemory):
             print('outlier distance', sorted([np.array(sorted(d)[:6]).sum() for d in distances]), sorted([np.array(sorted(d)[:6]).sum() for d in distances])[5])
             if sorted([np.array(sorted(d)[:6]).sum() for d in distances])[5]<self.outlier_distance:
 
-                clf = IsolationForest(n_estimators=5, random_state=self.seed, warm_start=True, contamination=0.10).fit(
+                clf = IsolationForest(n_estimators=5, random_state=self.seed, bootstrap=True, warm_start=True, contamination=0.10).fit(
                     outlier_grams)
 
                 print('outlier grams', outlier_grams[0].shape, len(outlier_grams))
@@ -190,7 +192,7 @@ class CasaDynamicMemory(DynamicMemory):
                                 to_delete.append(self.outlier_memory[k])
                                 budget -= 1.0
                                 self.labeling_counter += 1
-                                self.domainMetric[new_domain_label].append(model.get_task_metric(elem.img, elem.target)) #TODO error according to task!
+                                self.domainMetric[new_domain_label].append(model.get_task_metric(elem.img, elem.target))
                     else:
                         print('run out of budget ', budget)
                 for elem in to_delete:
@@ -274,7 +276,7 @@ class CasaDynamicMemory(DynamicMemory):
                     n_estimators = len(clf.estimators_) + 1
                     clf.__setattr__('n_estimators', n_estimators)
                 else:
-                    clf = IsolationForest(n_estimators=10)
+                    clf = IsolationForest(n_estimators=10, warm_start=True, contamination=0.10, random_state=self.seed)
 
                 clf.fit(domain_grams)
                 self.isoforests[domain] = clf
