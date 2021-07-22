@@ -7,11 +7,11 @@ settings:
 trainparams:
     method: 'casa'
     startbudget: 860
-    outlier_distance: 0.08
+    outlier_distance: 0.025
     continuous: True
     use_memory: True
     random_cache: True
-    transformgrams: False
+    transformgrams: True
     datasetfile: '/project/catinous/cardiacslicessplitsingle.csv'
     transition_phase_after: 0.8
     batch_size: 4

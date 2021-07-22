@@ -193,7 +193,6 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
                 if not v:
                     if len(self.trainingsmemory.domainMetric[k]) == self.mparams.len_perf_queue:
                         mean_metric = np.mean(self.trainingsmemory.domainMetric[k])
-                        print(mean_metric, k)
                         if self.completed_domain(mean_metric):
                             self.trainingsmemory.domaincomplete[k] = True
             return True

@@ -148,10 +148,6 @@ class CasaDynamicMemory(DynamicMemory):
         self.centers = {0: center}
         tmp_dist = [mean_squared_error(tr, center) for tr in trans_initelements]
         self.max_center_distances = {0: np.array(tmp_dist).mean()*2}
-        print('center', center, self.max_center_distances)
-
-        print('trans_init', trans_initelements[0:5])
-
         self.domaincomplete = {0: True}
 
         self.perf_queue_len = kwargs['perf_queue_len']
@@ -172,7 +168,6 @@ class CasaDynamicMemory(DynamicMemory):
 
             distance_list = [np.array(sorted(d)[:10]).sum() for d in distances]
 
-            print('outlier distance', sorted(distance_list)[5])
             if sorted(distance_list)[5]<self.outlier_distance:
 
                 #clf = IsolationForest(n_estimators=5, random_state=self.seed, bootstrap=True, warm_start=True, contamination=0.10).fit(
@@ -206,7 +201,6 @@ class CasaDynamicMemory(DynamicMemory):
                 self.centers[new_domain_label] = np.array(domain_grams).mean(axis=0)
                 tmp_dist = [mean_squared_error(tr, self.centers[new_domain_label]) for tr in domain_grams]
                 self.max_center_distances[new_domain_label] = np.array(tmp_dist).mean() * 2
-                print('new center', self.centers, self.max_center_distances)
 
 
                 for elem in self.get_domainitems(new_domain_label):
@@ -248,8 +242,6 @@ class CasaDynamicMemory(DynamicMemory):
         domain = self.check_pseudodomain(item.current_grammatrix)
         item.pseudo_domain = domain
 
-        print('predicted domain', domain)
-
         if domain==-1:
             #insert into outlier memory
             #check outlier memory for new clusters
@@ -273,8 +265,6 @@ class CasaDynamicMemory(DynamicMemory):
                 self.memorylist[idx] = item
                 self.labeling_counter += 1
                 self.domainMetric[domain].append(model.get_task_metric(item.img, item.target))
-
-                print('inserting sample', item.scanner)
 
                 # update center
                 domain_grams = [o.current_grammatrix for o in self.get_domainitems(domain)]
