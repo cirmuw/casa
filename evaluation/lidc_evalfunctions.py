@@ -7,8 +7,10 @@ import numpy as np
 import pandas as pd
 import active_dynamicmemory.utils as admutils
 import yaml
+import os
+import argparse
 
-def ap_model_mparams(mparams, split='test', scanners=['ges', 'geb', 'sie', 'time_siemens'], dspath='/project/catinous/lungnodulesfinalpatientsplit.csv'):
+def ap_model_mparams(mparams, split='test', scanners=['ges', 'geb', 'sie', 'lndb'], dspath='/project/catinous/lungnodulesfinallndbBig.csv'):
     device = torch.device('cuda')
     model, _, _, _ = rutils.trained_model(mparams['trainparams'], mparams['settings'], training=False)
     model.to(device)
@@ -17,7 +19,7 @@ def ap_model_mparams(mparams, split='test', scanners=['ges', 'geb', 'sie', 'time
     return recalls, precision, model
 
 
-def ap_model(model, split='test', scanners=['ges', 'geb', 'sie', 'time_siemens'], dspath='/project/catinous/lungnodulesfinalpatientsplit.csv'):
+def ap_model(model, split='test', scanners=['ges', 'geb', 'sie', 'lndb'], dspath='/project/catinous/lungnodulesfinallndbBig.csv'):
     recalls = dict()
     precision = dict()
 
@@ -30,7 +32,6 @@ def ap_model(model, split='test', scanners=['ges', 'geb', 'sie', 'time_siemens']
 
     for res in scanners:
         ds_test = LIDCBatch(dspath, split=split, res=res, validation=True)
-        print(res, len(ds_test))
 
         iou_thres = 0.2
 
@@ -102,7 +103,7 @@ def ap_model(model, split='test', scanners=['ges', 'geb', 'sie', 'time_siemens']
                 precision[res].append(overall_true_pos[k] / (overall_false_pos[k] + overall_true_pos[k]))
     return recalls, precision
 
-def recall_precision_to_ap(recalls, precisions, scanners=['ges', 'geb', 'sie', 'time_siemens']):
+def recall_precision_to_ap(recalls, precisions, scanners=['ges', 'geb', 'sie', 'lndb']):
     aps = dict()
     for res in scanners:
         prec = np.array(precisions[res])
@@ -117,29 +118,38 @@ def recall_precision_to_ap(recalls, precisions, scanners=['ges', 'geb', 'sie', '
         aps[res] = np.array(ap).mean()
     return aps
 
-def get_ap_for_res(params, split='test', shifts=None, scanners=['ges', 'geb', 'sie', 'time_siemens'], dspath='/project/catinous/lungnodulesfinalpatientsplit.csv'):
+def get_ap_for_res(params, split='test', shifts=None, scanners=['ges', 'geb', 'sie', 'lndb'], dspath='/project/catinous/lungnodulesfinallndbBig.csv'):
     device = torch.device('cuda')
-    recalls, precisions, model = ap_model_mparams(params, split, scanners=scanners, dspath=dspath)
-    aps = recall_precision_to_ap(recalls, precisions, scanners=scanners)
-    df_aps = pd.DataFrame([aps])
+    expname = admutils.get_expname(params['trainparams'])
+    settings = argparse.Namespace(**params['settings'])
 
-    if shifts is not None:
-        df_aps['shift'] = 'None'
 
-        modelpath = rutils.cached_path(params)
+    if not os.path.exists(f'{settings.RESULT_DIR}/cache/{expname}_{split}_aps.csv'):
+        recalls, precisions, model = ap_model_mparams(params, split, scanners=scanners, dspath=dspath)
+        aps = recall_precision_to_ap(recalls, precisions, scanners=scanners)
+        df_aps = pd.DataFrame([aps])
 
-        for s in shifts:
-            shiftmodelpath = f'{modelpath[:-3]}_shift_{s}.pt'
-            print('starting load shift model', s, shiftmodelpath)
-            model.model.load_state_dict(torch.load(shiftmodelpath, map_location=device))
-            model.freeze()
-            print('starting to eval on shiftmodel', s)
+        if shifts is not None:
+            df_aps['shift'] = 'None'
 
-            recalls, precisions = ap_model(model, split, scanners=scanners, dspath=dspath)
-            aps = recall_precision_to_ap(recalls, precisions, scanners=scanners)
-            aps = pd.DataFrame([aps])
-            aps['shift'] = s
-            df_aps = df_aps.append(aps)
+            modelpath = rutils.cached_path(params['trainparams'], params['settings']['TRAINED_MODELS_DIR'])
+
+            for s in shifts:
+                shiftmodelpath = f'{modelpath[:-3]}_shift_{s}.pt'
+                print('starting load shift model', s, shiftmodelpath)
+                model.model.load_state_dict(torch.load(shiftmodelpath, map_location=device))
+                model.freeze()
+                print('starting to eval on shiftmodel', s)
+
+                recalls, precisions = ap_model(model, split, scanners=scanners, dspath=dspath)
+                aps = recall_precision_to_ap(recalls, precisions, scanners=scanners)
+                aps = pd.DataFrame([aps])
+                aps['shift'] = s
+                df_aps = df_aps.append(aps)
+        df_aps.to_csv(f'{settings.RESULT_DIR}/cache/{expname}_{split}_aps.csv')
+    else:
+        df_aps = pd.read_csv(f'{settings.RESULT_DIR}/cache/{expname}_{split}_aps.csv')
+
     return df_aps
 
 def eval_lidc_cont(params, seeds=None, split='test', shifts=None, scanners=['ges', 'geb', 'sie', 'lndb'], dspath='/project/catinous/lungnodulesfinallndbBig.csv'):
@@ -167,3 +177,39 @@ def val_data_for_config(configfile, seeds=None):
         params = yaml.load(f, Loader=yaml.FullLoader)
 
     return eval_lidc_cont(params, seeds=seeds)
+
+
+def eval_config(configfile, seeds=None, name=None, split='test'):
+    with open(configfile) as f:
+        params = yaml.load(f, Loader=yaml.FullLoader)
+    if seeds is None:
+        df = get_ap_for_res(params, split=split)
+        if name is not None:
+            df['model'] = name
+        return df
+    else:
+        df = pd.DataFrame()
+        for i, seed in enumerate(seeds):
+            params['trainparams']['seed'] = seed
+            params['trainparams']['run_postfix'] = seed
+            df_temp = get_ap_for_res(params, split=split)
+            df_temp['seed'] = seed
+            if name is not None:
+                df_temp['model'] = name
+            df = df.append(df_temp)
+
+        return df
+
+def eval_config_list(configfiles, names, seeds=None, split='test'):
+    assert type(configfiles) is list, 'configfiles should be a list'
+    assert type(names) is list, 'method names should be a list'
+    assert len(configfiles) == len(names), 'configfiles and method names should match'
+
+    df_overall = pd.DataFrame()
+    for k, configfile in enumerate(configfiles):
+        df_conf = eval_config(configfile, seeds, names[k], split=split)
+        df_overall = df_overall.append(df_conf)
+
+    df_overview = df_overall.groupby(['model']).mean().reset_index()
+
+    return df_overview

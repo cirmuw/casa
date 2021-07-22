@@ -216,7 +216,11 @@ class CasaDynamicMemory(DynamicMemory):
 
     def flag_items_for_deletion(self):
         for k, v in self.domaincomplete.items():
-            domain_count = len(self.get_domainitems(k))
+            domain_items = self.get_domainitems(k)
+            domain_count = len(domain_items)
+            for di in domain_items:
+                if di.deleteflag:
+                    domain_count-= 1
             if domain_count>self.max_per_domain:
                 todelete = domain_count-self.max_per_domain
                 for item in self.memorylist:
@@ -224,8 +228,7 @@ class CasaDynamicMemory(DynamicMemory):
                         if item.pseudo_domain==k:
                             if not item.deleteflag:
                                 item.deleteflag = True
-
-                            todelete -= 1
+                                todelete -= 1
 
 
     def counter_outlier_memory(self):
