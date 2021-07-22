@@ -9,7 +9,7 @@ import collections
 import numpy as np
 from abc import ABC, abstractmethod
 import random
-
+from sklearn.metrics import mean_squared_error
 
 class MemoryItem():
 
@@ -135,15 +135,22 @@ class CasaDynamicMemory(DynamicMemory):
             print('fit sparse projection')
             for mi in initelements:
                 mi.current_grammatrix = self.transformer.transform(mi.current_grammatrix.reshape(1, -1))
+                mi.current_grammatrix = mi.current_grammatrix[0]
             trans_initelements = self.transformer.transform(graminits)
         else:
             print('no transform')
             self.transformer = None
             trans_initelements = graminits
 
-        clf = IsolationForest(n_estimators=10, random_state=self.seed, bootstrap=True, warm_start=True, contamination=0.10).fit(trans_initelements)
-        self.isoforests = {0: clf}
-        print('trans_init', trans_initelements[0].shape, len(trans_initelements))
+        #clf = IsolationForest(n_estimators=10, random_state=self.seed, bootstrap=True, warm_start=True, contamination=0.10).fit(trans_initelements)
+        #self.isoforests = {0: clf}
+        center = trans_initelements.mean(axis=0)
+        self.centers = {0: center}
+        tmp_dist = [mean_squared_error(tr, center) for tr in trans_initelements]
+        self.max_center_distances = {0: np.array(tmp_dist).mean()*2}
+        print('center', center, self.max_center_distances)
+
+        print('trans_init', trans_initelements[0:5])
 
         self.domaincomplete = {0: True}
 
@@ -159,19 +166,20 @@ class CasaDynamicMemory(DynamicMemory):
 
 
     def check_outlier_memory(self, budget, model):
-        if len(self.outlier_memory)>5 and int(budget)>=5:
+        if len(self.outlier_memory)>9 and int(budget)>=5:
             outlier_grams = [o.current_grammatrix for o in self.outlier_memory]
-
             distances = squareform(pdist(outlier_grams))
-            print('outlier distance', sorted([np.array(sorted(d)[:6]).sum() for d in distances]), sorted([np.array(sorted(d)[:6]).sum() for d in distances])[5])
-            if sorted([np.array(sorted(d)[:6]).sum() for d in distances])[5]<self.outlier_distance:
 
-                clf = IsolationForest(n_estimators=5, random_state=self.seed, bootstrap=True, warm_start=True, contamination=0.10).fit(
-                    outlier_grams)
+            distance_list = [np.array(sorted(d)[:10]).sum() for d in distances]
 
-                print('outlier grams', outlier_grams[0].shape, len(outlier_grams))
+            print('outlier distance', sorted(distance_list)[5])
+            if sorted(distance_list)[5]<self.outlier_distance:
 
-                new_domain_label = len(self.isoforests)
+                #clf = IsolationForest(n_estimators=5, random_state=self.seed, bootstrap=True, warm_start=True, contamination=0.10).fit(
+                #    outlier_grams)
+                to_delete = np.where(np.array(distance_list) < self.outlier_distance)[0]
+
+                new_domain_label = len(self.centers)
                 self.domaincomplete[new_domain_label] = False
                 self.domaincounter[new_domain_label] = 0
                 self.domainMetric[new_domain_label] = collections.deque(maxlen=self.perf_queue_len)
@@ -179,26 +187,27 @@ class CasaDynamicMemory(DynamicMemory):
 
                 self.flag_items_for_deletion()
 
-                to_delete = []
-                for k, p in enumerate(clf.predict(outlier_grams)):
+                for k, d in enumerate(to_delete):
                     if int(budget)>0:
-                        if p == 1:
-                            idx = self.find_insert_position()
-                            if idx != -1:
-                                elem = self.outlier_memory[k]
-                                elem.pseudo_domain = new_domain_label
-                                self.memorylist[idx] = elem
-                                self.domaincounter[new_domain_label] += 1
-                                to_delete.append(self.outlier_memory[k])
-                                budget -= 1.0
-                                self.labeling_counter += 1
-                                self.domainMetric[new_domain_label].append(model.get_task_metric(elem.img, elem.target))
+                        idx = self.find_insert_position()
+                        if idx != -1:
+                            elem = self.outlier_memory.pop(d-k)
+                            elem.pseudo_domain = new_domain_label
+                            self.memorylist[idx] = elem
+                            self.domaincounter[new_domain_label] += 1
+                            budget -= 1.0
+                            self.labeling_counter += 1
+                            self.domainMetric[new_domain_label].append(model.get_task_metric(elem.img, elem.target))
                     else:
                         print('run out of budget ', budget)
-                for elem in to_delete:
-                    self.outlier_memory.remove(elem)
 
-                self.isoforests[new_domain_label] = clf
+                domain_grams = [o.current_grammatrix for o in self.get_domainitems(new_domain_label)]
+
+                self.centers[new_domain_label] = np.array(domain_grams).mean(axis=0)
+                tmp_dist = [mean_squared_error(tr, self.centers[new_domain_label]) for tr in domain_grams]
+                self.max_center_distances[new_domain_label] = np.array(tmp_dist).mean() * 2
+                print('new center', self.centers, self.max_center_distances)
+
 
                 for elem in self.get_domainitems(new_domain_label):
                     print('found new domain', new_domain_label, elem.scanner)
@@ -267,19 +276,12 @@ class CasaDynamicMemory(DynamicMemory):
 
                 print('inserting sample', item.scanner)
 
-                # add tree to clf of domain
-                clf = self.isoforests[domain]
-                domain_items = self.get_domainitems(domain)
-                domain_grams = [d.current_grammatrix for d in domain_items]
+                # update center
+                domain_grams = [o.current_grammatrix for o in self.get_domainitems(domain)]
 
-                if len(clf.estimators_) < 10:
-                    n_estimators = len(clf.estimators_) + 1
-                    clf.__setattr__('n_estimators', n_estimators)
-                else:
-                    clf = IsolationForest(n_estimators=10, warm_start=True, contamination=0.10, random_state=self.seed)
-
-                clf.fit(domain_grams)
-                self.isoforests[domain] = clf
+                self.centers[domain] = np.array(domain_grams).mean(axis=0)
+                tmp_dist = [mean_squared_error(tr, self.centers[domain]) for tr in domain_grams]
+                self.max_center_distances[domain] = np.array(tmp_dist).mean() * 2
 
                 budget -= 1.0
             else:
@@ -289,15 +291,16 @@ class CasaDynamicMemory(DynamicMemory):
         return budget
 
     def check_pseudodomain(self, grammatrix):
-        max_pred = 0
+        max_pred = 100000
         current_domain = -1
 
-        for j, clf in self.isoforests.items():
-            current_pred = clf.decision_function(grammatrix.reshape(1, -1))
-            #print('iso forest pred', current_pred, current_domain)
-            if current_pred>max_pred:
-                current_domain = j
-                max_pred = current_pred
+        for j, center in self.centers.items():
+            if mean_squared_error(grammatrix, center)<self.max_center_distances[j]:
+                current_pred = mean_squared_error(grammatrix, center)
+                #print('iso forest pred', current_pred, current_domain)
+                if current_pred<max_pred:
+                    current_domain = j
+                    max_pred = current_pred
 
         return current_domain
 

@@ -29,8 +29,8 @@ def ap_model(model, split='test', scanners=['ges', 'geb', 'sie', 'time_siemens']
     device = torch.device('cuda')
 
     for res in scanners:
-        ds_test = LIDCBatch(dspath,
-                            cropped_to=(288, 288), split=split, res=res, validation=True)
+        ds_test = LIDCBatch(dspath, split=split, res=res, validation=True)
+        print(res, len(ds_test))
 
         iou_thres = 0.2
 
@@ -151,14 +151,16 @@ def eval_lidc_cont(params, seeds=None, split='test', shifts=None, scanners=['ges
         for i, seed in enumerate(seeds):
             params['trainparams']['seed'] = seed
             params['trainparams']['run_postfix'] = i+1
-            aps = get_ap_for_res(params['trainparams'], split=split, shifts=shifts, scanners=scanners, dspath=dspath)
+            aps = get_ap_for_res(params, split=split, shifts=shifts, scanners=scanners, dspath=dspath)
             aps['seed'] = seed
             seeds_aps = seeds_aps.append(aps)
     else:
-        aps = get_ap_for_res(params['trainparams'], split=split, shifts=shifts, scanners=scanners, dspath=dspath)
+        aps = get_ap_for_res(params, split=split, shifts=shifts, scanners=scanners, dspath=dspath)
         seeds_aps = seeds_aps.append(aps)
 
     #seeds_aps.to_csv(outputfile, index=False)
+
+    return seeds_aps
     
 def val_data_for_config(configfile, seeds=None):
     with open(configfile) as f:

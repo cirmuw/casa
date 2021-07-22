@@ -8,7 +8,7 @@ trainparams:
     method: 'casa'
     task: 'lidc'
     startbudget: 177
-    outlier_distance: 0.08
+    outlier_distance: 0.025
     continuous: True
     use_memory: True
     random_cache: True
@@ -19,13 +19,13 @@ trainparams:
     training_batch_size: 8
     order: ['ges', 'geb', 'sie', 'lndb']
     scanner: null
-    base_model: 'lidc_batch_lungnodulesfinallndbBig_base_1_81a5a903a8.pt'
+    base_model: 'lidc_batch_lungnodulesfinallndbBig_base_1_f537b60b93.pt' #'lidc_batch_lungnodulesfinallndbBig_base_1_81a5a903a8.pt'
     run_postfix: 1
-    val_check_interval: 20
+    val_check_interval: 10
     memorymaximum: 128
-    completion_limit: 0.4 #this is iou!
+    completion_limit: 0.4 #0.4 #this is iou!
     droprate: 0.0
-    learning_rate: 0.00001
+    learning_rate: 0.00001 #0.0001
     gradient_clip_val: 0.5
     allowedlabelratio: 0
     len_perf_queue: 8

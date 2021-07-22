@@ -94,22 +94,23 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
 
         memoryitems = []
         self.grammatrices = []
+
+        self.stylemodel.eval()
+
         for batch in dl:
             torch.cuda.empty_cache()
 
             x, y, scanner, filepath = batch
 
-            if type(x) is list:
-                x = torch.stack(x)
-
-            x = x.to(self.device)
-
-            if x.size()[1]==1 and self.mparams.dim!=3:
+            if type(x) is list or type(x) is tuple:
+                xstyle = torch.stack(x)
+            elif x.size()[1]==1 and self.mparams.dim!=3:
                 xstyle = torch.cat([x, x, x], dim=1)
             else:
                 xstyle = x
 
-            _ = self.stylemodel(xstyle)
+
+            _ = self.stylemodel(xstyle.to(self.device))
 
             for i, f in enumerate(filepath):
                 target = y[i]
@@ -119,10 +120,9 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
                     det_target = {}
                     for k, v in target.items():
                         det_target[k] = v.detach().cpu()
-
-                grammatrix = [bg[i].detach().cpu().numpy().flatten() for bg in self.grammatrices]
+                grammatrix = self.grammatrices[0][i].detach().cpu().numpy().flatten()
                 memoryitems.append(MemoryItem(x[i].detach().cpu(), det_target, f, scanner[i],
-                                              current_grammatrix=grammatrix[0],
+                                              current_grammatrix=grammatrix,
                                               pseudo_domain=0))
 
             if len(memoryitems) >= num_items:
@@ -163,7 +163,7 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
         budget_before = self.budget
 
         for i, img in enumerate(x):
-            grammatrix = [bg[i].detach().cpu().numpy().flatten() for bg in self.grammatrices]
+            grammatrix = self.grammatrices[0][i].detach().cpu().numpy().flatten()
 
             target = y[i]
             if type(target) == torch.Tensor:
@@ -174,7 +174,7 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
                     det_target[k] = v.detach().cpu()
 
 
-            new_mi = MemoryItem(img.detach().cpu(), det_target, filepath[i], scanner[i], grammatrix[0])
+            new_mi = MemoryItem(img.detach().cpu(), det_target, filepath[i], scanner[i], grammatrix)
             self.budget = self.trainingsmemory.insert_element(new_mi, self.budget, self)
 
         self.budget = self.trainingsmemory.check_outlier_memory(self.budget, self)
@@ -228,6 +228,8 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
         x, y, scanner, filepath = batch
 
         self.grammatrices = []
+
+        self.stylemodel.eval()
 
         if self.mparams.continuous:
             # save checkpoint at scanner shift
