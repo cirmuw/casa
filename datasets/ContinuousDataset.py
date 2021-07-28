@@ -69,9 +69,9 @@ class ContinuousDataset(Dataset):
 
 class BrainAgeContinuous(ContinuousDataset):
 
-    def __init__(self, datasetfile, transition_phase_after=.8, order=['1.5T Philips', '3.0T Philips', '3.0T'], seed=None):
+    def __init__(self, datasetfile, transition_phase_after=.8, order=['1.5T Philips', '3.0T Philips', '3.0T'], seed=None, random=False):
         super(ContinuousDataset, self).__init__()
-        self.init(datasetfile, transition_phase_after, order, seed)
+        self.init(datasetfile, transition_phase_after, order, seed, random)
 
 
     def __getitem__(self, index):
@@ -87,9 +87,9 @@ class BrainAgeContinuous(ContinuousDataset):
 
 class LIDCContinuous(ContinuousDataset):
 
-    def __init__(self, datasetfile, transition_phase_after=.8, order=['ges', 'geb', 'sie', 'time_siemens'], seed=None, cropped_to=(288, 288)):
+    def __init__(self, datasetfile, transition_phase_after=.8, order=['ges', 'geb', 'sie', 'time_siemens'], seed=None, cropped_to=(288, 288), random=False):
         super(ContinuousDataset, self).__init__()
-        self.init(datasetfile, transition_phase_after, order, seed)
+        self.init(datasetfile, transition_phase_after, order, seed, random)
         self.cropped_to = cropped_to
         self.df_multiplenodules = pd.read_csv('/project/catinous/lungnodules_allnodules.csv')
 
@@ -204,9 +204,9 @@ class LIDCContinuous(ContinuousDataset):
 
 class CardiacContinuous(ContinuousDataset):
 
-    def __init__(self, datasetfile, transition_phase_after=.8, order=['Siemens', 'GE', 'Philips', 'Canon'], seed=None):
+    def __init__(self, datasetfile, transition_phase_after=.8, order=['Siemens', 'GE', 'Philips', 'Canon'], seed=None, random=False):
         super(ContinuousDataset, self).__init__()
-        self.init(datasetfile, transition_phase_after, order, seed)
+        self.init(datasetfile, transition_phase_after, order, seed, random)
 
         self.outsize = (240, 192)
 
