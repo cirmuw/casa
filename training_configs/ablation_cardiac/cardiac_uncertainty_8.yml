@@ -5,26 +5,28 @@ settings:
     RESULT_DIR: '/project/catinous/active_catinous/MELBA/output/results/'
 
 trainparams:
-    method: 'naive'
-    task: 'lidc'
-    naive_insert_rate: 5
-    startbudget: 177
+    method: 'uncertainty'
+    task: 'cardiac'
+    startbudget: 537
+    uncertainty_threshold: 0.03
+    uncertainty_iterations: 20
     continuous: True
     use_memory: True
     random_cache: True
-    datasetfile: '/project/catinous/lungnodulesfinallndbBig.csv'
+    datasetfile: '/project/catinous/cardiacslicessplitsingle.csv'
     transition_phase_after: 0.8
     batch_size: 4
     training_batch_size: 8
-    order: ['ges', 'geb', 'sie', 'lndb']
+    order: ['Siemens', 'GE', 'Philips', 'Canon']
     scanner: null
-    base_model: 'lidc_batch_lungnodulesfinallndbBig_base_1_4e8934473e.pt'
+    base_model: 'cardiac_batch_cardiacslicessplitsingle_base_1_d885e299cf.pt'
     run_postfix: 1
     val_check_interval: 10
-    memorymaximum: 64
-    droprate: 0.0
+    memorymaximum: 128
+    droprate: 0.25
     learning_rate: 0.0001
     gradient_clip_val: 0.5
     allowedlabelratio: 0
     dim: 2
     seed: 1
+    random_insert: False

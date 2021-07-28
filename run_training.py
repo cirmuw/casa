@@ -3,10 +3,8 @@ import argparse
 import active_dynamicmemory.runutils as rutils
 from py_jotools import slurm
 
-def train_config(configfile, remote=False, runs=None, jobarray=False):
-    with open(configfile) as f:
-        params = yaml.load(f, Loader=yaml.FullLoader)
 
+def train_params(params, remote=False, runs=None, jobarray=False):
     if remote:
         with open('training_configs/slurm_config.yml') as s:
             sparams = yaml.load(s, Loader=yaml.FullLoader)
@@ -31,6 +29,12 @@ def train_config(configfile, remote=False, runs=None, jobarray=False):
             else:
                 model, logs, df_mem, exp_name = rutils.trained_model(params['trainparams'], params['settings'])
                 print('successfully trained model', exp_name)
+
+def train_config(configfile, remote=False, runs=None, jobarray=False):
+    with open(configfile) as f:
+        params = yaml.load(f, Loader=yaml.FullLoader)
+
+    train_params(params, remote=remote, runs=runs, jobarray=jobarray)
 
 
 if __name__ == "__main__":

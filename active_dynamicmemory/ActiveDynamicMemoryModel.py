@@ -278,12 +278,20 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
 
     def train_dataloader(self):
         if self.mparams.continuous:
-            return DataLoader(self.TaskDatasetContinuous(self.mparams.datasetfile,
-                                                         transition_phase_after=self.mparams.transition_phase_after,
-                                                         seed=self.mparams.seed,
-                                                         order=self.mparams.order),
-                              batch_size=self.mparams.batch_size, num_workers=8, drop_last=True,
-                              collate_fn=self.collate_fn)
+            if 'randomstream' in self.mparams:
+                return DataLoader(self.TaskDatasetContinuous(self.mparams.datasetfile,
+                                                             transition_phase_after=self.mparams.transition_phase_after,
+                                                             seed=self.mparams.seed,
+                                                             order=self.mparams.order, random=True),
+                                  batch_size=self.mparams.batch_size, num_workers=8, drop_last=True,
+                                  collate_fn=self.collate_fn)
+            else:
+                return DataLoader(self.TaskDatasetContinuous(self.mparams.datasetfile,
+                                                             transition_phase_after=self.mparams.transition_phase_after,
+                                                             seed=self.mparams.seed,
+                                                             order=self.mparams.order),
+                                  batch_size=self.mparams.batch_size, num_workers=8, drop_last=True,
+                                  collate_fn=self.collate_fn)
         else:
             return DataLoader(self.TaskDatasetBatch(self.mparams.datasetfile,
                                                     iterations=self.mparams.noncontinuous_steps,

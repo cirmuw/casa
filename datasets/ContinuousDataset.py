@@ -10,53 +10,58 @@ import random
 
 class ContinuousDataset(Dataset):
 
-    def init(self, datasetfile, transition_phase_after, order, seed):
+    def init(self, datasetfile, transition_phase_after, order, seed, random=False):
         df = pd.read_csv(datasetfile)
         assert (set(['train']).issubset(df.split.unique()))
         np.random.seed(seed)
-        print(order)
-        res_dfs = list()
-        for r in order:
-            res_df = df.loc[df.scanner == r]
-            res_df = res_df.loc[res_df.split == 'train']
-            res_df = res_df.sample(frac=1, random_state=seed)
 
-            res_dfs.append(res_df.reset_index(drop=True))
+        if random:
+            df = df.sample(frac=1, random_state=seed)
+            self.df = df
+        else:
+            print(order)
+            res_dfs = list()
+            for r in order:
+                res_df = df.loc[df.scanner == r]
+                res_df = res_df.loc[res_df.split == 'train']
+                res_df = res_df.sample(frac=1, random_state=seed)
 
-        combds = None
-        new_idx = 0
+                res_dfs.append(res_df.reset_index(drop=True))
 
-        for j in range(len(res_dfs) - 1):
-            old = res_dfs[j]
-            new = res_dfs[j + 1]
-
-
-            old_end = int((len(old) - new_idx) * transition_phase_after) + new_idx
-            if combds is None:
-                combds = old.iloc[:old_end]
-            else:
-                combds = combds.append(old.iloc[new_idx + 1:old_end])
-
-            old_idx = old_end
-            old_max = len(old) - 1
+            combds = None
             new_idx = 0
-            i = 0
 
-            while old_idx <= old_max and (i / ((old_max - old_end) * 2) < 1):
-                take_newclass = np.random.binomial(1, min(i / ((old_max - old_end) * 2), 1))
-                if take_newclass:
-                    if new_idx<len(new):
-                        combds = combds.append(new.iloc[new_idx])
-                        new_idx += 1
+            for j in range(len(res_dfs) - 1):
+                old = res_dfs[j]
+                new = res_dfs[j + 1]
+
+
+                old_end = int((len(old) - new_idx) * transition_phase_after) + new_idx
+                if combds is None:
+                    combds = old.iloc[:old_end]
                 else:
-                    combds = combds.append(old.iloc[old_idx])
-                    old_idx += 1
-                i += 1
-            combds = combds.append(old.iloc[old_idx:])
+                    combds = combds.append(old.iloc[new_idx + 1:old_end])
 
-        combds = combds.append(new.iloc[new_idx:])
-        combds.reset_index(inplace=True, drop=True)
-        self.df = combds
+                old_idx = old_end
+                old_max = len(old) - 1
+                new_idx = 0
+                i = 0
+
+                while old_idx <= old_max and (i / ((old_max - old_end) * 2) < 1):
+                    take_newclass = np.random.binomial(1, min(i / ((old_max - old_end) * 2), 1))
+                    if take_newclass:
+                        if new_idx<len(new):
+                            combds = combds.append(new.iloc[new_idx])
+                            new_idx += 1
+                    else:
+                        combds = combds.append(old.iloc[old_idx])
+                        old_idx += 1
+                    i += 1
+                combds = combds.append(old.iloc[old_idx:])
+
+            combds = combds.append(new.iloc[new_idx:])
+            combds.reset_index(inplace=True, drop=True)
+            self.df = combds
 
     def __len__(self):
         return len(self.df)

@@ -5,30 +5,29 @@ settings:
     RESULT_DIR: '/project/catinous/active_catinous/MELBA/output/results/'
 
 trainparams:
-    task: 'brainage'
     method: 'casa'
-    startbudget: 378
-    outlier_distance: 0.20
+    startbudget: 537
+    outlier_distance: 0.025
     continuous: True
     use_memory: True
     random_cache: True
     transformgrams: True
-    datasetfile: '/project/catinous/brainds_split_val_test_melba.csv'
+    datasetfile: '/project/catinous/cardiacslicessplitsingle.csv'
     transition_phase_after: 0.8
-    batch_size: 2
-    training_batch_size: 4
-    order: ['1.5T Philips', '1.5T', '3.0T Philips', '3.0T'] #changed that
+    batch_size: 4
+    training_batch_size: 8
+    task: 'cardiac'
+    order: ['Siemens', 'GE', 'Philips', 'Canon']
     scanner: null
-    base_model: 'brainage_batch_brainds_split_val_test_melba_base_1_9fd356bd91.pt'
-    val_check_interval: 20
-    memorymaximum: 64
-    completion_limit: 7.0
-    droprate: 0.0
-    fulldrop: True
-    learning_rate: 0.00001
+    base_model: 'cardiac_batch_cardiacslicessplitsingle_base_1_d885e299cf.pt'
+    run_postfix: 1
+    val_check_interval: 10
+    memorymaximum: 128
+    completion_limit: 0.75
+    droprate: 0.25
+    learning_rate: 0.0001
     gradient_clip_val: 0.5
     allowedlabelratio: 0
     len_perf_queue: 8
-    dim: 3
-    run_postfix: 1
+    dim: 2
     seed: 1
