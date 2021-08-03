@@ -7,8 +7,8 @@ settings:
 trainparams:
     task: 'brainage'
     method: 'casa'
-    startbudget: 378
-    outlier_distance: 0.20
+    startbudget: 189
+    outlier_distance: 0.80 #0.60
     continuous: True
     use_memory: True
     random_cache: True
@@ -17,12 +17,12 @@ trainparams:
     transition_phase_after: 0.8
     batch_size: 2
     training_batch_size: 4
-    order: ['1.5T Philips', '1.5T', '3.0T Philips', '3.0T'] #changed that
+    order: ['1.5T Philips', '1.5T', '3.0T Philips', '3.0T']
     scanner: null
     base_model: 'brainage_batch_brainds_split_val_test_melba_base_1_9fd356bd91.pt'
-    val_check_interval: 20
-    memorymaximum: 64
-    completion_limit: 7.0
+    val_check_interval: 10
+    memorymaximum: 128
+    completion_limit: 5.0
     droprate: 0.0
     fulldrop: True
     learning_rate: 0.00001

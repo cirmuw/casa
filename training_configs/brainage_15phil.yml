@@ -13,7 +13,7 @@ trainparams:
     noncontinuous_steps: 2000
     noncontinuous_train_splits: ['base', 'train']
     order: ['1.5T Philips', '1.5T', '3.0T', '3.0T Philips']
-    scanner: null
+    scanner: '1.5T Philips'
     base_model: null
     run_postfix: 1
     val_check_interval: 50

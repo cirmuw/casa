@@ -168,6 +168,8 @@ class CasaDynamicMemory(DynamicMemory):
 
             distance_list = [np.array(sorted(d)[:10]).sum() for d in distances]
 
+            print(sorted(distance_list), sorted(distance_list)[5])
+
             if sorted(distance_list)[5]<self.outlier_distance:
 
                 #clf = IsolationForest(n_estimators=5, random_state=self.seed, bootstrap=True, warm_start=True, contamination=0.10).fit(
@@ -294,7 +296,7 @@ class CasaDynamicMemory(DynamicMemory):
                 if current_pred<max_pred:
                     current_domain = j
                     max_pred = current_pred
-
+        print('predicted ', current_domain)
         return current_domain
 
 

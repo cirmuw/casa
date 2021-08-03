@@ -213,8 +213,12 @@ def eval_config_list(configfiles, names, seeds=None, value='mean'):
         df_conf = eval_config(configfile, seeds, names[k])
         df_overall = df_overall.append(df_conf)
 
-    df_overview = df_overall.groupby(['model', 'scanner']).mean().reset_index()
-    df_overview = df_overview.pivot(index='model', columns='scanner', values=value).round(3)
+    if value!='std':
+        df_overview = df_overall.groupby(['model', 'scanner']).mean().reset_index()
+        df_overview = df_overview.pivot(index='model', columns='scanner', values=value).round(3)
+    else:
+        df_overview = df_overall.groupby(['model', 'scanner']).std().reset_index()
+        df_overview = df_overview.pivot(index='model', columns='scanner', values='mean').round(3)
 
     return df_overview
 
@@ -264,19 +268,19 @@ def plot_validation_curves(configfiles, val_measure='val_mean', names=None, seed
         df = val_data_for_params(params, seeds=seeds)
         ax = axes[k]
         for scanner in params['trainparams']['order']:
-            sns.lineplot(data=df, y=f'{val_measure}_{scanner}', x='idx', err_style=None, ax=ax, label=scanner)
-        ax.set_ylim(0.50, 0.89)
-        ax.set_yticks([0.85, 0.80, 0.75, 0.70])
+            sns.lineplot(data=df, y=f'{val_measure}_{scanner}', x='idx', ax=ax, label=scanner)
+        ax.set_ylim(0.30, 0.80)
+        #ax.set_yticks([0.85, 0.80, 0.75, 0.70])
         ax.get_xaxis().set_visible(False)
         ax.get_legend().remove()
-        ax.set_xlim(1, 53)
+        ax.set_xlim(1, df.idx.max())
         if names is not None:
             ax.set_ylabel(names[k])
 
         ax.tick_params(labelright=True, right=True)
 
     # creating timeline
-    ds = CardiacContinuous(params['trainparams']['datasetfile'], seed=1654130)
+    ds = CardiacContinuous(params['trainparams']['datasetfile'], seed=1)
     res = ds.df.scanner == params['trainparams']['order'][0]
     for j, s in enumerate(params['trainparams']['order'][1:]):
         res[ds.df.scanner == s] = j+2

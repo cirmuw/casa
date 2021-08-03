@@ -7,7 +7,7 @@ settings:
 trainparams:
     task: 'brainage'
     method: 'naive'
-    startbudget: 537
+    startbudget: 237
     naive_insert_rate: 8
     continuous: True
     use_memory: True
@@ -20,7 +20,7 @@ trainparams:
     scanner: null
     base_model: 'brainage_batch_brainds_split_val_test_melba_base_1_9fd356bd91.pt'
     val_check_interval: 10
-    memorymaximum: 64
+    memorymaximum: 128
     droprate: 0.1
     fulldrop: True
     learning_rate: 0.0001

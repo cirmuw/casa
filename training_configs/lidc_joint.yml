@@ -5,21 +5,19 @@ settings:
     RESULT_DIR: '/project/catinous/active_catinous/MELBA/output/results/'
 
 trainparams:
-    task: 'brainage'
     continuous: False
     use_memory: False
-    datasetfile: '/project/catinous/brainds_split_val_test_melba.csv'
+    datasetfile: '/project/catinous/lungnodulesfinallndbBig.csv'
     batch_size: 8
-    noncontinuous_steps: 2000
+    task: 'lidc'
+    noncontinuous_steps: 5000 #1000, 1000, 1000
     noncontinuous_train_splits: ['base', 'train']
-    order: ['1.5T Philips', '1.5T', '3.0T', '3.0T Philips']
+    order: ['ges', 'geb', 'sie', 'lndb']
     scanner: null
     base_model: null
     run_postfix: 1
+    seed: 1 # 6511620
     val_check_interval: 50
-    droprate: 0.0
-    learning_rate: 0.0001
-    gradient_clip_val: 0
-    dim: 3
-    fulldrop: False
-    seed: 1
+    droprate: 0.0 #0.0, 0.0, 0.0
+    learning_rate: 0.0001 #0.0001
+    gradient_clip_val: 0.5 #0.5, 0.5, 0.5
