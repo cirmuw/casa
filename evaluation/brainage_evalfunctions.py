@@ -1,6 +1,8 @@
 import math
 import torch
 from datasets.BatchDataset import BrainAgeBatch
+from datasets.ContinuousDataset import BrainAgeContinuous
+import numpy as np
 import pandas as pd
 import active_dynamicmemory.runutils as rutils
 from torch.utils.data import DataLoader
@@ -8,6 +10,10 @@ import argparse
 import active_dynamicmemory.utils as admutils
 import os
 import yaml
+import matplotlib.pyplot as plt
+import seaborn as sns
+from matplotlib.colors import ListedColormap
+
 
 def eval_brainage(params, outfile, split=['test']):
     """
@@ -174,7 +180,6 @@ def val_data_for_params(params, seeds=None):
             params['trainparams']['run_postfix'] = i + 1
             df = df.append(val_df_for_params(params))
 
-
     return df
 
 def val_df_for_params(params):
@@ -184,13 +189,12 @@ def val_df_for_params(params):
     max_version = max([int(x.split('_')[1]) for x in os.listdir(settings.LOGGING_DIR + exp_name)])
     df_temp = pd.read_csv(settings.LOGGING_DIR  + exp_name + '/version_{}/metrics.csv'.format(max_version))
 
-    print(df_temp)
-    df_temp = df_temp.loc[df_temp['val_ap_geb'] == df_temp['val_ap_geb']]
+    df_temp = df_temp.loc[df_temp['val_mae_1.5T Philips'] == df_temp['val_mae_1.5T Philips']]
     df_temp['idx'] = range(1, len(df_temp) + 1)
 
     return df_temp
 
-def plot_validation_curves(configfiles, val_measure='val_ap', names=None, seeds=None):
+def plot_validation_curves(configfiles, val_measure='val_mae', names=None, seeds=None):
     assert type(configfiles) is list, "configfiles should be a list"
 
     fig, axes = plt.subplots(len(configfiles)+1, 1, figsize=(10, 2.5*(len(configfiles))))
@@ -215,11 +219,11 @@ def plot_validation_curves(configfiles, val_measure='val_ap', names=None, seeds=
         ax.tick_params(labelright=True, right=True)
 
     # creating timeline
-    ds = LIDCContinuous(params['trainparams']['datasetfile'], seed=1)
+    ds = BrainAgeContinuous(params['trainparams']['datasetfile'], seed=1)
     res = ds.df.scanner == params['trainparams']['order'][0]
     for j, s in enumerate(params['trainparams']['order'][1:]):
         res[ds.df.scanner == s] = j+2
 
-    axes[-1].imshow(np.tile(res,(400,1)), cmap=ListedColormap(sns.color_palette()[:4]))
+    axes[-1].imshow(np.tile(res,(300,1)), cmap=ListedColormap(sns.color_palette()[:4]))
     axes[-1].get_yaxis().set_visible(False)
     axes[-1].get_yaxis()

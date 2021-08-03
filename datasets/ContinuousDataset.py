@@ -16,6 +16,7 @@ class ContinuousDataset(Dataset):
         np.random.seed(seed)
 
         if random:
+            df = df.loc[df.split=='train']
             df = df.sample(frac=1, random_state=seed)
             self.df = df
         else:
@@ -69,7 +70,7 @@ class ContinuousDataset(Dataset):
 
 class BrainAgeContinuous(ContinuousDataset):
 
-    def __init__(self, datasetfile, transition_phase_after=.8, order=['1.5T Philips', '3.0T Philips', '3.0T'], seed=None, random=False):
+    def __init__(self, datasetfile, transition_phase_after=.8, order=['1.5T Philips', '1.5T', '3.0T Philips', '3.0T'], seed=None, random=False):
         super(ContinuousDataset, self).__init__()
         self.init(datasetfile, transition_phase_after, order, seed, random)
 

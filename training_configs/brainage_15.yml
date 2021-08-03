@@ -1,0 +1,25 @@
+settings:
+    LOGGING_DIR: '/project/catinous/active_catinous/MELBA/log/tensorboard_logs/'
+    TRAINED_MODELS_DIR: '/project/catinous/active_catinous/MELBA/output/trained_models/'
+    TRAINED_MEMORY_DIR: '/project/catinous/active_catinous/MELBA/output/trained_memory/'
+    RESULT_DIR: '/project/catinous/active_catinous/MELBA/output/results/'
+
+trainparams:
+    task: 'brainage'
+    continuous: False
+    use_memory: False
+    datasetfile: '/project/catinous/brainds_split_val_test_melba.csv'
+    batch_size: 8
+    noncontinuous_steps: 2000
+    noncontinuous_train_splits: ['base', 'train']
+    order: ['1.5T Philips', '1.5T', '3.0T', '3.0T Philips']
+    scanner: '1.5T'
+    base_model: null
+    run_postfix: 1
+    val_check_interval: 50
+    droprate: 0.0
+    learning_rate: 0.0001
+    gradient_clip_val: 0
+    dim: 3
+    fulldrop: False
+    seed: 1
