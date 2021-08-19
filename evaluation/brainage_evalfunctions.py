@@ -94,6 +94,8 @@ def eval_params(params, split='test'):
     expname = admutils.get_expname(params['trainparams'])
     order = params['trainparams']['order'].copy()
 
+    print(f'{settings.RESULT_DIR}/cache/{expname}_{split}_AEs.csv')
+
     if not os.path.exists(f'{settings.RESULT_DIR}/cache/{expname}_{split}_AEs.csv'):
         if params['trainparams']['continuous'] == False:
             eval_brainage_batch(params, f'{settings.RESULT_DIR}/cache/{expname}_{split}_AEs.csv', split=split)
@@ -115,15 +117,15 @@ def eval_params(params, split='test'):
 
     for i in range(len(order) - 1):
         df_scanner = df_bwt_fwt.loc[df_bwt_fwt.scanner == order[i]]
-        bwt = df_scanner.loc[df_scanner['shift'] == 'None'].ae.values[0] - \
-                         df_scanner.loc[df_scanner['shift'] == order[i + 1]].ae.values[0]
+        bwt += df_scanner.loc[df_scanner['shift'] == order[i + 1]].ae.values[0] - \
+               df_scanner.loc[df_scanner['shift'] == 'None'].ae.values[0]
 
     order.append('None')
 
     for i in range(2, len(order)):
         df_scanner = df_bwt_fwt.loc[df_bwt_fwt.scanner == order[i - 1]]
-        fwt += df_scanner.loc[df_scanner['shift'] == order[i]].ae.values[0] - \
-                         df_scanner.loc[df_scanner['shift'] == order[1]].ae.values[0]
+        fwt += df_scanner.loc[df_scanner['shift'] == order[1]].ae.values[0] - df_scanner.loc[df_scanner['shift'] == order[i]].ae.values[0]
+
 
     bwt /= len(order) - 1
     fwt /= len(order) - 1

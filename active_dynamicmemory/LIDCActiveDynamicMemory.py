@@ -240,28 +240,38 @@ class LIDCActiveDynamicMemory(ActiveDynamicMemoryModel):
 
     def get_uncertainties(self, x):
         out = self.forward(x)
-        boxes, scores = lutils.filter_boxes_area(out[0]['boxes'].cpu().detach().numpy(),
-                                                 out[0]['scores'].cpu().detach().numpy(), min_score=0.2)
-        fb, fs = lutils.correct_boxes(boxes, scores)
 
-        bious = []
+        uncs = []
 
-        for i in range(self.mparams.uncertainty_iterations):
-            out = self.forward(x)
-            boxes, scores = lutils.filter_boxes_area(out[0]['boxes'].cpu().detach().numpy(),
-                                                     out[0]['scores'].cpu().detach().numpy(), min_score=0.2)
-            fb2, fs2 = lutils.correct_boxes(boxes, scores)
+        for o in out:
+            if len(o['scores']>0):
+                uncs.append(1-o['scores'].max())
+            else:
+                uncs.append(0.0)
 
-            for i, b in enumerate(fb):
-                ious = []
-                for j, b2 in enumerate(fb2):
-                    ious.append(lutils.bb_intersection_over_union(b, b2))
-                if len(bious) <= i:
-                    bious.append([])
-                if len(ious) > 0:
-                    bious[i].append(np.array(ious).max() * fs[i])
-            if len(fb2) > 0:
-                fb, fs = lutils.correct_boxes(np.concatenate([fb, fb2]), np.concatenate([fs, fs2]))
+        #
+        # boxes, scores = lutils.filter_boxes_area(out[0]['boxes'].cpu().detach().numpy(),
+        #                                          out[0]['scores'].cpu().detach().numpy(), min_score=0.2)
+        # fb, fs = lutils.correct_boxes(boxes, scores)
+        #
+        #
+        # bious = []
+        #
+        # for i in range(self.mparams.uncertainty_iterations):
+        #     out = self.forward(x)
+        #     boxes, scores = lutils.filter_boxes_area(out[0]['boxes'].cpu().detach().numpy(),
+        #                                              out[0]['scores'].cpu().detach().numpy(), min_score=0.2)
+        #     fb2, fs2 = lutils.correct_boxes(boxes, scores)
+        #
+        #     for i, b in enumerate(fb):
+        #         ious = []
+        #         for j, b2 in enumerate(fb2):
+        #             ious.append(lutils.bb_intersection_over_union(b, b2))
+        #         if len(bious) <= i:
+        #             bious.append([])
+        #         if len(ious) > 0:
+        #             bious[i].append(np.array(ious).max() * fs[i])
+        #     if len(fb2) > 0:
+        #         fb, fs = lutils.correct_boxes(np.concatenate([fb, fb2]), np.concatenate([fs, fs2]))
 
-
-        return np.array(bious[0]).std()
+        return uncs

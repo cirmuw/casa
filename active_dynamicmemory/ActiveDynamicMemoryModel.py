@@ -209,12 +209,22 @@ class ActiveDynamicMemoryModel(pl.LightningModule, ABC):
         for p in self.modules():
             if isinstance(p, nn.Dropout):
                 p.train()
+
         uncertainties = self.get_uncertainties(x)
         self.unfreeze()
 
         for i, img in enumerate(x):
             grammatrix = [bg[i].detach().cpu().numpy().flatten() for bg in self.grammatrices]
-            new_mi = MemoryItem(img.detach().cpu(), y[i].detach().cpu(), filepath[i], scanner[i], grammatrix[0])
+            target = y[i]
+            if type(target) == torch.Tensor:
+                det_target = target.detach().cpu()
+            else:
+                det_target = {}
+                for k, v in target.items():
+                    det_target[k] = v.detach().cpu()
+
+
+            new_mi = MemoryItem(img.detach().cpu(), det_target, filepath[i], scanner[i], grammatrix[0])
             self.budget = self.trainingsmemory.insert_element(new_mi, uncertainties[i], self.budget, self)
 
         if budget_before == self.budget:
