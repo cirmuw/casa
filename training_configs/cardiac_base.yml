@@ -1,13 +1,13 @@
 settings:
-    LOGGING_DIR: '/project/catinous/active_catinous/MELBA/log/tensorboard_logs/'
-    TRAINED_MODELS_DIR: '/project/catinous/active_catinous/MELBA/output/trained_models/'
-    TRAINED_MEMORY_DIR: '/project/catinous/active_catinous/MELBA/output/trained_memory/'
-    RESULT_DIR: '/project/catinous/active_catinous/MELBA/output/results/'
+    LOGGING_DIR: '</path/to/projectdirectory/>/log/tensorboard_logs/'
+    TRAINED_MODELS_DIR: '</path/to/projectdirectory/>/output/trained_models/'
+    TRAINED_MEMORY_DIR: '</path/to/projectdirectory/>/output/trained_memory/'
+    RESULT_DIR: '</path/to/projectdirectory/>/output/results/'
 
 trainparams:
     continuous: False
     use_memory: False
-    datasetfile: '/project/catinous/cardiacslicessplitsingle.csv'
+    datasetfile: '</path/to/projectdirectory/>/data/cardiacdatasetsplit.csv'
     batch_size: 8
     task: 'cardiac'
     noncontinuous_steps: 5000
