@@ -29,7 +29,7 @@ To run the training the config files in `training_configs/` are used. Please mod
 
 `python run_training.py --config training_configs/cardiac_base.yml`
 
-`python run_training.py --config training_configs/cardiac_dynamicmemory.yml`
+`python run_training.py --config training_configs/cardiac_casa.yml`
 
 **4. Results**
 

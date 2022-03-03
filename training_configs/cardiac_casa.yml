@@ -7,7 +7,7 @@ settings:
 trainparams:
     method: 'casa'
     startbudget: 430
-    outlier_distance: 0.025
+    outlier_distance: 0.025 # 0.08
     continuous: True
     use_memory: True
     random_cache: True
