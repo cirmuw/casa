@@ -1,12 +1,9 @@
 from pytorch_lightning.utilities.parsing import AttributeDict
 import argparse
-
 import hashlib
 import pickle
 import skimage.transform
 import numpy as np
-import pydicom as pyd
-
 import torch
 import os
 import pandas as pd

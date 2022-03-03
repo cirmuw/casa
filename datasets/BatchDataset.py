@@ -323,12 +323,6 @@ class CardiacBatch(BatchDataset):
         return img[startx:startx + cropx, starty:starty + cropy]
 
     def load_image(self, elem):
-        # img = sitk.ReadImage(elem.filepath)
-        # img = sitk.GetArrayFromImage(img)[elem.t, elem.slice, :, :]
-        # img = mut.norm01(img)
-
-        # mask = sitk.ReadImage(elem.filepath[:-7] + '_gt.nii.gz')
-        # mask = sitk.GetArrayFromImage(mask)[elem.t, elem.slice, :, :]
 
         img = np.load(elem.slicepath)
         mask = np.load(elem.slicepath[:-4] + '_gt.npy')

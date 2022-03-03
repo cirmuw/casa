@@ -33,7 +33,6 @@ class CardiacActiveDynamicMemory(ActiveDynamicMemoryModel):
 
         if load_stylemodel:
             stylemodel = models.resnet50(pretrained=True)
-            # stylemodel.conv1 = nn.Conv2d(1, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
             gramlayers = [stylemodel.layer2[-1].conv1]
             stylemodel.eval()
 
@@ -134,7 +133,6 @@ class CardiacActiveDynamicMemory(ActiveDynamicMemoryModel):
 
         for i in range(len(x)):
             y_hat_detach = [t.detach().cpu().numpy() for t in y_hat_flats]
-            #uncertainties.append(np.array(y_hat_detach).std(axis=0)[i].mean())
             uncertainties.append(np.quantile(np.array(y_hat_detach).std(axis=0)[i], 0.95))
 
         return uncertainties

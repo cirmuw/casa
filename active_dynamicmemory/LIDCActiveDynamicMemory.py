@@ -249,29 +249,4 @@ class LIDCActiveDynamicMemory(ActiveDynamicMemoryModel):
             else:
                 uncs.append(0.0)
 
-        #
-        # boxes, scores = lutils.filter_boxes_area(out[0]['boxes'].cpu().detach().numpy(),
-        #                                          out[0]['scores'].cpu().detach().numpy(), min_score=0.2)
-        # fb, fs = lutils.correct_boxes(boxes, scores)
-        #
-        #
-        # bious = []
-        #
-        # for i in range(self.mparams.uncertainty_iterations):
-        #     out = self.forward(x)
-        #     boxes, scores = lutils.filter_boxes_area(out[0]['boxes'].cpu().detach().numpy(),
-        #                                              out[0]['scores'].cpu().detach().numpy(), min_score=0.2)
-        #     fb2, fs2 = lutils.correct_boxes(boxes, scores)
-        #
-        #     for i, b in enumerate(fb):
-        #         ious = []
-        #         for j, b2 in enumerate(fb2):
-        #             ious.append(lutils.bb_intersection_over_union(b, b2))
-        #         if len(bious) <= i:
-        #             bious.append([])
-        #         if len(ious) > 0:
-        #             bious[i].append(np.array(ious).max() * fs[i])
-        #     if len(fb2) > 0:
-        #         fb, fs = lutils.correct_boxes(np.concatenate([fb, fb2]), np.concatenate([fs, fs2]))
-
         return uncs

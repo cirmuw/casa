@@ -1,10 +1,7 @@
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 from scipy.spatial.distance import pdist, squareform
-from sklearn.ensemble import IsolationForest
 from sklearn.decomposition import PCA
-from sklearn.random_projection import SparseRandomProjection
 import collections
 import numpy as np
 from abc import ABC, abstractmethod
@@ -129,7 +126,6 @@ class CasaDynamicMemory(DynamicMemory):
             graminits.append(mi.current_grammatrix)
         print('gram matrix init elements', initelements[0].current_grammatrix.shape)
         if kwargs['transformgrams']:
-            #self.transformer = SparseRandomProjection(random_state=self.seed, n_components=30)
             self.transformer = PCA(random_state=self.seed, n_components=30)
             self.transformer.fit(graminits)
             print('fit sparse projection')
@@ -142,8 +138,6 @@ class CasaDynamicMemory(DynamicMemory):
             self.transformer = None
             trans_initelements = graminits
 
-        #clf = IsolationForest(n_estimators=10, random_state=self.seed, bootstrap=True, warm_start=True, contamination=0.10).fit(trans_initelements)
-        #self.isoforests = {0: clf}
         center = trans_initelements.mean(axis=0)
         self.centers = {0: center}
         tmp_dist = [mean_squared_error(tr, center) for tr in trans_initelements]
@@ -151,9 +145,9 @@ class CasaDynamicMemory(DynamicMemory):
         self.domaincomplete = {0: True}
 
         self.perf_queue_len = kwargs['perf_queue_len']
-        self.domainMetric = {0: collections.deque(maxlen=self.perf_queue_len)} #TODO: this is an arbritary threshold
+        self.domainMetric = {0: collections.deque(maxlen=self.perf_queue_len)}
         self.outlier_memory = []
-        self.outlier_epochs = 15 #TODO: this is an arbritary threshold
+        self.outlier_epochs = 15
 
         if 'outlier_distance' in kwargs:
             self.outlier_distance = kwargs['outlier_distance']
@@ -172,10 +166,7 @@ class CasaDynamicMemory(DynamicMemory):
 
             if sorted(distance_list)[5]<self.outlier_distance:
 
-                #clf = IsolationForest(n_estimators=5, random_state=self.seed, bootstrap=True, warm_start=True, contamination=0.10).fit(
-                #    outlier_grams)
                 to_delete = np.where(np.array(distance_list) < self.outlier_distance)[0]
-
                 new_domain_label = len(self.centers)
                 self.domaincomplete[new_domain_label] = False
                 self.domaincounter[new_domain_label] = 0
@@ -292,7 +283,6 @@ class CasaDynamicMemory(DynamicMemory):
         for j, center in self.centers.items():
             if mean_squared_error(grammatrix, center)<self.max_center_distances[j]:
                 current_pred = mean_squared_error(grammatrix, center)
-                #print('iso forest pred', current_pred, current_domain)
                 if current_pred<max_pred:
                     current_domain = j
                     max_pred = current_pred

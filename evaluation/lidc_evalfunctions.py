@@ -121,13 +121,13 @@ def recall_precision_to_ap(recalls, precisions, scanners=['ges', 'geb', 'sie', '
         aps[res] = np.array(ap).mean()
     return aps
 
-def get_ap_for_res(params, split='test', shifts=None, scanners=['ges', 'geb', 'sie', 'lndb'], dspath='/project/catinous/lungnodulesfinallndbBig.csv'):
+def get_ap_for_res(params, split='test', shifts=None, scanners=['ges', 'geb', 'sie', 'lndb'], dspath='/project/catinous/lungnodulesfinallndbBig.csv', force_recalculation = False):
     device = torch.device('cuda')
     expname = admutils.get_expname(params['trainparams'])
     settings = argparse.Namespace(**params['settings'])
 
 
-    if not os.path.exists(f'{settings.RESULT_DIR}/cache/{expname}_{split}_aps.csv'):
+    if not os.path.exists(f'{settings.RESULT_DIR}/cache/{expname}_{split}_aps.csv') or force_recalculation:
         recalls, precisions, model = ap_model_mparams(params, split, scanners=scanners, dspath=dspath)
         aps = recall_precision_to_ap(recalls, precisions, scanners=scanners)
         df_aps = pd.DataFrame([aps])
@@ -182,11 +182,11 @@ def val_data_for_config(configfile, seeds=None):
     return eval_lidc_cont(params, seeds=seeds)
 
 
-def eval_config(configfile, seeds=None, name=None, split='test'):
+def eval_config(configfile, shifts=None, seeds=None, name=None, split='test', force_recalculation = False):
     with open(configfile) as f:
         params = yaml.load(f, Loader=yaml.FullLoader)
     if seeds is None:
-        df = get_ap_for_res(params, split=split)
+        df = get_ap_for_res(params, shifts=shifts, split=split, force_recalculation = force_recalculation)
         if name is not None:
             df['model'] = name
         return df
@@ -195,11 +195,34 @@ def eval_config(configfile, seeds=None, name=None, split='test'):
         for i, seed in enumerate(seeds):
             params['trainparams']['seed'] = seed
             params['trainparams']['run_postfix'] = seed
-            df_temp = get_ap_for_res(params, split=split)
-            df_temp['seed'] = seed
+            df_temp = get_ap_for_res(params, shifts=shifts, split=split, force_recalculation = force_recalculation)
+
+            df_res = df_temp.loc[df_temp['shift'] == 'None']
+
+            bwt = 0.0
+            fwt = 0.0
+            order = ['ges', 'geb', 'sie', 'lndb']
+
+            for i in range(len(order) - 1):
+                bwt += df_temp.loc[df_temp['shift'] == 'None'][order[i]].values[0] - \
+                       df_temp.loc[df_temp['shift'] == order[i + 1]][order[i]].values[0]
+
+            bwt /= len(order) - 1
+
+            order.append('None')
+            for i in range(2, len(order)):
+                fwt += df_temp.loc[df_temp['shift'] == order[i]][order[i - 1]].values[0] - \
+                       df_temp.loc[df_temp['shift'] == order[1]][order[i - 1]].values[0]
+
+            fwt /= len(order) - 1
+
+            df_res['bwt'] = bwt
+            df_res['fwt'] = fwt
+
+            df_res['seed'] = seed
             if name is not None:
-                df_temp['model'] = name
-            df = df.append(df_temp)
+                df_res['model'] = name
+            df = df.append(df_res)
 
         return df
 

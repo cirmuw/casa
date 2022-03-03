@@ -1,11 +1,8 @@
-import torch
 import argparse
-import os
 from pytorch_lightning import Trainer
 from active_dynamicmemory.CardiacActiveDynamicMemory import CardiacActiveDynamicMemory
 from active_dynamicmemory.BrainAgeActiveDynamicMemory import BrainAgeActiveDynamicMemory
 from active_dynamicmemory.LIDCActiveDynamicMemory import LIDCActiveDynamicMemory
-import pytorch_lightning.loggers as pllogging
 import pandas as pd
 import pytorch_lightning.loggers as pllogging
 from . import utils
